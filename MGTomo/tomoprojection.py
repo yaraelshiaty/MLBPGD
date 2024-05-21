@@ -6,7 +6,7 @@ class TomoParallel(object):
     self.proj_id = astra.create_projector(mode, proj_geom, vol_geom)
     self.shape = (proj_geom['DetectorCount'] * len(proj_geom['ProjectionAngles']),
                   vol_geom['GridColCount'] * vol_geom['GridRowCount'])
-    self.dtype = np.float
+    self.dtype = float
 
   def matvec(self, v):
     sid, s = astra.create_sino(v, self.proj_id) # np.reshape(v, (vol_geom['GridRowCount'], vol_geom['GridColCount']))

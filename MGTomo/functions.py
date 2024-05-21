@@ -3,6 +3,8 @@ import scipy.sparse as sci
 import timeit
 import cupy as cp
 
+import pyximport
+pyximport.install(setup_args={"script_args" : ["--verbose"]})
 from MGTomo.cython.cython_huber import huber
 from MGTomo.tomoprojection import TomoParallel
 
