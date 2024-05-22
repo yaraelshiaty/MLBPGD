@@ -2,6 +2,9 @@ import MGTomo.model as mgmodel
 import MGTomo.functions as fcts
 from scipy import interpolate
 import numpy as np
+import torch
+import torch.func import grad
+
 import matplotlib.pyplot as plt
 import h5py
 from skimage.transform import rescale, resize
@@ -40,17 +43,14 @@ def coarse_f(fh, l):
     
 
 def coarsen_fn(fh, x, y0, l):
-    x0 = R(y)
+    x0 = R(y0)
     fH = lambda x: coarse_f(fh, x, l)
-    grad_fh()
+    grad_fh = grad(fh)
+    grad_fH = grad(fH)
     
-    val_f_y0, grad_f_y0 = fh(y0)
-    val_fH_x0, grad_fH_x0 = fH(x0)
-    val_fH_x, grad_fH_x = fH(x)
+    kappa = R(grad_fh(y0)) - grad_fH(x0)
+    val = fH(x) + torch.inner(kappa, x)
     
-    kappa = R(grad_fh_y0) - grad_fH_x0
-    
-    val = val_fH_x + np.inner(kappa, x)
-    val_grad = grad_fH_x + kappa
+    #val_grad = grad_fH(x) + kappa
     
     return val, val_grad
