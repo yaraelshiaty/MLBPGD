@@ -1,9 +1,9 @@
 import MGTomo.model as mgmodel
-import MGTomo.functions as fcts
+import MGTomo.Yfunctions as fcts
 from scipy import interpolate
 import numpy as np
 import torch
-import torch.func import grad
+from torch.func import grad
 
 import matplotlib.pyplot as plt
 import h5py
@@ -14,7 +14,7 @@ import sys
 import pandas as pd
 
 def R(y):
-    x = y[1:-1:2, 1:-1,2]
+    x = y[1:-1:2, 1:-1:2]
     return x
 
 def iterative_method(f, x, tau):
@@ -26,7 +26,7 @@ def MLO(fh, y, l=0):
     psi = lambda x: coarsen_fn(fh, x, y0)
     
     for i in range(maxIter[l]):
-        x = iterative_method(psi, x, tau)
+        x = fcts.SMART(psi, x, tau)
         
     if l < max_levels:
         x = MLO(psi, x, l+1)
@@ -44,7 +44,7 @@ def coarse_f(fh, l):
 
 def coarsen_fn(fh, x, y0, l):
     x0 = R(y0)
-    fH = lambda x: coarse_f(fh, x, l)
+    fH = lambda x: fcts.kl_distance(x, A[l+1], b[l+1])
     grad_fh = grad(fh)
     grad_fH = grad(fH)
     

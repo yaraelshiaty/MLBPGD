@@ -74,7 +74,7 @@ def kl_distance(x: np.ndarray,proj: TomoParallel,b: np.ndarray,cuda=True):
     g0 = proj.rmatvec(np.log(ab))
     g1 = proj.rmatvec(ax)
 
-  return f,g0 + g1
+  return f,g0
 
 def least_square(x: np.ndarray,proj: TomoParallel,b: np.ndarray):
   y = proj.matvec(x) - b
