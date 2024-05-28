@@ -10,6 +10,7 @@ class AstraLinearFunction(torch.autograd.Function):
     def forward(ctx, tomo_matrix, input_vector):
         # Perform the sparse matrix-vector multiplication
         output = tomo_matrix.matvec(input_vector.cpu().numpy())
+        output = np.float64(output)
         # Save the custom sparse matrix and input vector for backward pass
         ctx.tomo_matrix = tomo_matrix
         return torch.from_numpy(output)
@@ -35,13 +36,26 @@ class TomoTorch(nn.Module):
     def forward(self, v):
         return AstraLinearFunction.apply(self.tomop, v)
     
+    def sumnorm(self):
+        dim = int(np.sqrt(self.shape[1]))
+        max_sum = 0
+        
+        for i in range(dim):
+            for j in range(dim):
+                E_ij = torch.zeros(dim, dim)
+                E_ij[i, j] = 1
+                col = self.forward(E_ij)
+                col_sum = torch.sum(torch.abs(col))
+                if col_sum > max_sum:
+                    max_sum = col_sum
+        return max_sum
 
 class TomoParallel(object):
   def __init__(self, proj_geom, vol_geom, mode='line'):
     self.proj_id = astra.create_projector(mode, proj_geom, vol_geom)
     self.shape = (proj_geom['DetectorCount'] * len(proj_geom['ProjectionAngles']),
                   vol_geom['GridColCount'] * vol_geom['GridRowCount'])
-    self.dtype = float
+    self.dtype = float 
 
   def matvec(self, v):
     sid, s = astra.create_sino(v, self.proj_id) # np.reshape(v, (vol_geom['GridRowCount'], vol_geom['GridColCount']))
