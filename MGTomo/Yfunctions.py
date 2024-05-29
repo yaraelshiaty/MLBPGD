@@ -4,7 +4,7 @@ import astra
 import MGTomo.tomoprojection as mgproj
 from MGTomo.utils import myexp, mylog, mydiv
 
-def kl_distance_v2(x: torch.tensor, proj: mgproj.TomoTorch, b: torch.tensor):
+def kl_distance(x: torch.tensor, proj: mgproj.TomoTorch, b: torch.tensor):
     ax = proj(x)
     #ab = torch.divide(ax, b)
     ab = mydiv(ax,b)
@@ -14,7 +14,7 @@ def kl_distance_v2(x: torch.tensor, proj: mgproj.TomoTorch, b: torch.tensor):
     #fx = torch.sum(erg[b > 0.])
     return fx
 
-def kl_distance(x: torch.tensor, proj: mgproj.TomoTorch, b: torch.tensor):
+def kl_distance_v2(x: torch.tensor, proj: mgproj.TomoTorch, b: torch.tensor):
     ax = proj(x)
     erg = ax * (mylog(ax) - mylog(b)) + b - ax
     fx = torch.sum(erg)
@@ -25,7 +25,6 @@ def SMART(f, x: torch.tensor, tau):
     fx = f(x)
     fx.backward(retain_graph = True)
     val = x * myexp(-tau * x.grad)
-    #val.requires_grad = True
     
     return val
 
@@ -33,6 +32,7 @@ def armijo_linesearch(f,x: torch.tensor,d: torch.tensor,a=1.,r=0.5,c=1e-4):
     fx = f(x)
     fx.backward()
     dgk = torch.sum(x.grad*d)
+    #print(dgk)
     f_new = f(x + a * d)
     x_new = x
     
