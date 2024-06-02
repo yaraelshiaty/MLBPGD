@@ -34,3 +34,9 @@ def R_v2(input_image):
     output_image = F.interpolate(input_image.unsqueeze(0).unsqueeze(0), scale_factor=0.5, mode='nearest')
 
     return output_image.squeeze(0).squeeze(0)
+
+def R_v3(y):
+    
+    x = y[1:-1:2, 1:-1:2]
+    
+    return x
