@@ -12,13 +12,14 @@ def kl_distance(x: torch.tensor, proj: mgproj.TomoTorch, b: torch.tensor):
     erg = ax * mylog(ab) + b - ax
     fx = torch.sum( erg[b > 0.] ) + 0.5*torch.sum(ax[b == 0.]**2)
     #fx = torch.sum(erg[b > 0.])
-    return fx
+    assert fx >= 0, 'kl distance error: output is negative.'
+    return fx.requires_grad_(True)
 
 def kl_distance_v2(x: torch.tensor, proj: mgproj.TomoTorch, b: torch.tensor):
     ax = proj(x)
     erg = ax * (mylog(ax) - mylog(b)) + b - ax
-    fx = torch.sum(erg)
-    
+    fx = torch.sum( erg[b > 0.] ) + 0.5*torch.sum(ax[b == 0.]**2)
+    assert fx >= 0, 'kl distance error: output is negative.'
     return fx.requires_grad_(True)
 
 def SMART(f, x: torch.tensor, tau):
@@ -26,6 +27,10 @@ def SMART(f, x: torch.tensor, tau):
     fx.backward(retain_graph = True)
     val = x * myexp(-tau * x.grad)
     
+    if (f(val) - fx).abs() < 1e-2*5:
+        return x
+    
+    #assert f(val) < fx, 'SMART iterations do not descend'
     return val
 
 def armijo_linesearch(f,x: torch.tensor,d: torch.tensor,a=1.,r=0.5,c=1e-4):
@@ -41,13 +46,12 @@ def armijo_linesearch(f,x: torch.tensor,d: torch.tensor,a=1.,r=0.5,c=1e-4):
     if dgk == 0.:
         return x
     
-    while f_new > fx + a * c * dgk and a > 1e-7:
-        #needed added x_new > 0
+    while f_new > fx + a * c * dgk and a > 1e-7 and x_new.min() >= 0:
         x_new = x + a * d
         f_new = f(x_new)
         a *= r
     
-    if f_new < fx :
+    if f_new < fx:
         return x_new
     else:
         return x
