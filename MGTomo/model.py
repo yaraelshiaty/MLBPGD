@@ -1,6 +1,6 @@
 from MGTomo.tomoprojection import TomoParallel,TomoParallelSquare
 import MGTomo.grid as grid
-import MGTomo.mgtools as mgtools
+#import MGTomo.mgtools as mgtools
 import MGTomo.Tools.json as mjson
 
 from skimage.util import view_as_windows
@@ -138,10 +138,3 @@ class astra_model(object):
     if k is None:
       k = self.lvl_dec
     return reduce_dim(n,k)
-
-  def first_order_coherence(self,f,fh,x):
-    return mgtools.first_order_coherence(f,fh,x,
-                                  lambda z: grid.fine2coarse(z, self.x_stencil),
-                                  lambda z: grid.fine2coarse(z, self.g_stencil)
-                                  )
-
