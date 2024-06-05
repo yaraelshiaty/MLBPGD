@@ -27,6 +27,8 @@ def SMART(f, x: torch.tensor, tau):
     fx.backward(retain_graph = True)
     val = x * myexp(-tau * x.grad)
     
+    assert val.max() <= 1.
+    
     if (f(val) - fx).abs() < 1e-2*5:
         return x
     
