@@ -13,3 +13,6 @@ def mydiv(x, y):
     out = torch.ones_like(x)
     out[mask] = torch.divide(x[mask], y[mask])
     return out
+
+def mysub(x, y):
+    return mylog(myexp(x)*myexp(-y))
