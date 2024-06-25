@@ -16,6 +16,14 @@ def kl_distance(x: torch.tensor, proj: mgproj.TomoTorch, b: torch.tensor):
     #assert fx >= 0, 'kl distance error: output is negative.'
     return fx.requires_grad_(True)
 
+def kl_distance_no_matrix(x: torch.tensor, y: torch.tensor):
+    xy = mydiv(x,y)
+
+    erg = x * mylog(xy) + y - x
+    fx = torch.sum( erg[y > 0.] ) + 0.5*torch.sum(x[y == 0.]**2)
+    assert fx >= 0, fx
+    return fx.requires_grad_(True)
+
 def kl_distance_v2(x: torch.tensor, proj: mgproj.TomoTorch, b: torch.tensor):
     ax = proj(x)
     erg = ax * (mylog(ax) - mylog(b)) + b - ax
