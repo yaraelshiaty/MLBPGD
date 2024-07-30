@@ -62,3 +62,12 @@ def armijo_linesearch(f, x: torch.tensor, d: torch.tensor, a=1., r = 0.5, c = 1e
             return x, 0.
     
     return x_new, a
+
+def box_bounds(xh, xH, P_inf, lh, uh):
+    lmax = torch.max(lh - xh)
+    umin = torch.min(uh-xh)
+
+    lH = xH + 1/P_inf * lmax
+    uH = xH + 1/P_inf * umin
+
+    return lH, uH

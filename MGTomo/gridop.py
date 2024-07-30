@@ -5,7 +5,7 @@ def P(input_image):
     # Define the bilinear interpolation kernel
     kernel = torch.tensor([[1, 2, 1],
                            [2, 4, 2],
-                           [1, 2, 1]], dtype=torch.float32) / 4
+                           [1, 2, 1]], dtype=torch.float32)
     
     # Convert the kernel to 4D tensor
     kernel = kernel.unsqueeze(0).unsqueeze(0)
@@ -19,7 +19,7 @@ def R(input_image):
     # Define the bilinear interpolation kernel for transposed convolution
     kernel = torch.tensor([[1, 2, 1],
                            [2, 4, 2],
-                           [1, 2, 1]], dtype=torch.float32) / 4
+                           [1, 2, 1]], dtype=torch.float32)
     
     # Convert the kernel to 4D tensor
     kernel = kernel.unsqueeze(0).unsqueeze(0)
