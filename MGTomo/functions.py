@@ -56,3 +56,19 @@ def BSMART(f, x: torch.tensor, tau):
         return x
     
     return x_new
+
+def BSMART_general(f, x: torch.tensor, tau, l, u):
+    fx = f(x)
+    fx.backward(retain_graph = True)
+    ones = torch.ones_like(x)
+    val = mydiv(x-l, u-x) * myexp(-tau * x.grad)
+
+    x_new = mydiv(u*val - l, ones + val)
+
+    assert torch.all(x_new >= l)
+    assert torch.all(x_new <= u)
+
+    if (f(x_new) - fx).abs() < 1e-2*5:
+        return x
+    
+    return x_new
