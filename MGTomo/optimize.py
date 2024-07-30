@@ -1,4 +1,5 @@
 import torch
+from MGTomo import gridop
 
 def armijo_linesearch_box(f, x: torch.tensor, d: torch.tensor, a=1., r=0.5, c=1e-3, verbose = True):
     fx = f(x)
@@ -64,10 +65,19 @@ def armijo_linesearch(f, x: torch.tensor, d: torch.tensor, a=1., r = 0.5, c = 1e
     return x_new, a
 
 def box_bounds(xh, xH, P_inf, lh, uh):
-    lmax = torch.max(lh - xh)
-    umin = torch.min(uh-xh)
+    coarse_dim = xH.shape[0]
+    lH = torch.zeros_like(xH)
+    uH = torch.zeros_like(xH)
 
-    lH = xH + 1/P_inf * lmax
-    uH = xH + 1/P_inf * umin
+    P_nonzero = gridop.compute_nonzero_elements_of_P(coarse_dim)
+
+    for col_coord in P_nonzero.keys():
+        lvalues = torch.tensor([lh[t]-xh[t] for t in P_nonzero[col_coord]])
+        lmax = torch.max(lvalues)
+        lH[col_coord] = xH[col_coord] + 1/P_inf * lmax
+
+        uvalues = torch.tensor([uh[t]-xh[t] for t in P_nonzero[col_coord]])
+        umin = torch.min(uvalues)
+        uH[col_coord] = xH[col_coord] + 1/P_inf * umin
 
     return lH, uH
