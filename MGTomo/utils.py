@@ -4,7 +4,7 @@ import numpy as np
 def myexp(x):
     return torch.exp(torch.minimum(torch.maximum(x, torch.tensor(-50.0)),torch.tensor(50.0)))
 
-def mylog(x, delta=torch.tensor(1e-10)):
+def mylog(x, delta=torch.tensor(1e-40)):
     return torch.log(torch.maximum(x, delta))
 
 #umweg bc torch.divide doesn't have where keyword argument

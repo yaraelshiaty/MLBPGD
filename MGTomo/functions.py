@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 import astra
 
 import MGTomo.tomoprojection as mgproj
@@ -57,18 +58,28 @@ def BSMART(f, x: torch.tensor, tau):
     
     return x_new
 
-def BSMART_general(f, x: torch.tensor, tau, l, u):
+def BSMART_general(f, x: torch.tensor, logv, tau, l, u):
+    x = x.clone().detach().requires_grad_(True)
     fx = f(x)
     fx.backward(retain_graph = True)
-    ones = torch.ones_like(x)
-    val = mydiv(x-l, u-x) * myexp(-tau * x.grad)
+    xgrad = x.grad
 
-    x_new = mydiv(u*val - l, ones + val)
+    assert not torch.any(torch.isnan(logv))
+    assert not torch.any(torch.isnan(xgrad))
 
-    assert torch.all(x_new >= l)
-    assert torch.all(x_new <= u)
+    with torch.no_grad():
+        logv_new = logv - tau * xgrad
+        assert not torch.any(torch.isnan(logv_new))
+        xminl = (u-l) * myexp(logv_new) * myexp(-F.softplus(logv_new))
+        assert not torch.any(torch.isnan(xminl)), torch.any(myexp(logv_new - F.softplus(logv_new)))
+        x_new = xminl + l
+
+        assert not torch.any(torch.isnan(x_new)), print(x_new)
+
+        assert torch.all(x_new >= l), (x_new - l).max()
+        assert torch.all(x_new <= u + 1e-5), (u - x_new).min()
 
     if (f(x_new) - fx).abs() < 1e-2*5:
-        return x
+        return x, logv
     
-    return x_new
+    return x_new, logv_new
