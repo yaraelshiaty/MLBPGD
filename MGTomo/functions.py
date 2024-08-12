@@ -77,7 +77,9 @@ def BSMART_general(f, x: torch.tensor, logv, tau, l, u):
         assert not torch.any(torch.isnan(x_new)), print(x_new)
 
         assert torch.all(x_new >= l), (x_new - l).max()
-        assert torch.all(x_new <= u + 1e-5), (u - x_new).min()
+        assert torch.all(x_new <= u + 1e-7), torch.sum(x_new - u <= 0)
+        #(u - x_new).min()
+        #assert torch.all(x_new <= u), x_new.flatten()[(u - x_new).argmin()]
 
     if (f(x_new) - fx).abs() < 1e-2*5:
         return x, logv

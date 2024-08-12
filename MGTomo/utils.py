@@ -2,10 +2,13 @@ import torch
 import numpy as np
 
 def myexp(x):
-    return torch.exp(torch.minimum(torch.maximum(x, torch.tensor(-50.0)),torch.tensor(50.0)))
+    return torch.exp(torch.minimum(torch.maximum(x, torch.tensor(-80.0)),torch.tensor(80.0)))
 
-def mylog(x, delta=torch.tensor(1e-40)):
-    return torch.log(torch.maximum(x, delta))
+def mylog(x, delta=torch.tensor(1e-20)):
+    #return torch.log(torch.maximum(x, delta))
+    mask = x < delta
+    x = torch.where(mask, delta, x)
+    return torch.log(x + delta)
 
 #umweg bc torch.divide doesn't have where keyword argument
 def mydiv(x, y):
