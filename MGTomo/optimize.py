@@ -64,20 +64,24 @@ def armijo_linesearch(f, x: torch.tensor, d: torch.tensor, a=1., r = 0.5, c = 1e
     
     return x_new, a
 
-def box_bounds(xh, xH, P_inf, lh, uh):
-    coarse_dim = xH.shape[0]
+def box_bounds(xh, xH, P_inf, lh, uh, P_nonzero= None):
+    if P_nonzero == None:
+        coarse_dim = xH.shape[0]
+        P_nonzero = gridop.compute_nonzero_elements_of_P(coarse_dim)
+    
     lH = torch.zeros_like(xH)
     uH = torch.zeros_like(xH)
 
-    P_nonzero = gridop.compute_nonzero_elements_of_P(coarse_dim)
-
-    for col_coord in P_nonzero.keys():
-        lvalues = torch.tensor([lh[t]-xh[t] for t in P_nonzero[col_coord]])
-        lmax = torch.max(lvalues)
-        lH[col_coord] = xH[col_coord] + 1/P_inf * lmax
-
-        uvalues = torch.tensor([uh[t]-xh[t] for t in P_nonzero[col_coord]])
-        umin = torch.min(uvalues)
-        uH[col_coord] = xH[col_coord] + 1/P_inf * umin
-
+    for col_coord, indices in P_nonzero.items():
+        rows, cols = zip(*indices)
+        
+        rows = torch.tensor(rows)
+        cols = torch.tensor(cols)
+        
+        diffs = xh[rows, cols]
+        lmax = torch.max(lh[rows, cols] - diffs)
+        umin = torch.min(uh[rows, cols] - diffs)
+        
+        lH[col_coord] = xH[col_coord] + lmax / P_inf
+        uH[col_coord] = xH[col_coord] + umin / P_inf
     return lH, uH
