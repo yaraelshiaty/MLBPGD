@@ -13,7 +13,7 @@ def mylog(x, delta=torch.tensor(1e-20)):
 #umweg bc torch.divide doesn't have where keyword argument
 def mydiv(x, y):
     mask = (y != 0)
-    out = torch.ones_like(x)
+    out = torch.ones_like(y)
     #assert x[mask].dtype == y[mask].dtype, x[mask].dtype
     out[mask] = torch.divide(x[mask], y[mask])
     return out
