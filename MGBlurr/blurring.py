@@ -24,6 +24,9 @@ class GaussianBlurOperator:
         # Apply Gaussian blur
         blurred_x = self.blur(x)
 
+        if x.requires_grad:
+           blurred_x.requires_grad_(True)
+
         # Remove the batch and channel dimensions if necessary
         if blurred_x.shape[0] == 1 and blurred_x.shape[1] == 1:
             return blurred_x.squeeze(0).squeeze(0)
