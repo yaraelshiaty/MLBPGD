@@ -41,7 +41,7 @@ def armijo_linesearch_box(f, x: torch.tensor, d: torch.tensor, a=1., r=0.5, c=1e
 
 def armijo_linesearch(f, x: torch.tensor, d: torch.tensor, a=1., r = 0.5, c = 1e-3):
     fx = f(x)
-    fx.backward()
+    fx.backward(retain_graph=True)
     dgk = torch.sum(x.grad * d)
     
     assert dgk <= 0, 'd needs to be a descent direction (dgk = %.5e)' % dgk
