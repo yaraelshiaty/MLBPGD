@@ -145,33 +145,33 @@ if __name__ == "__main__":
 
 
     w0 = torch.ones(N, N) * 0.5
-w0.requires_grad_(True)
+    w0.requires_grad_(True)
 
-rel_f_err_SL = []
-rel_f_err_SL.append((matrix_norm(w0 - x_torch)/matrix_norm(w0)).item())
+    rel_f_err_SL = []
+    rel_f_err_SL.append((matrix_norm(w0 - x_torch)/matrix_norm(w0)).item())
 
-iteration_times_SL = []
-iteration_times_SL.append(0)
-overall_start_time_SL = time.time()  # Start overall timing
+    iteration_times_SL = []
+    iteration_times_SL.append(0)
+    overall_start_time_SL = time.time()  # Start overall timing
 
-logv_new = (w0 - lh) / (uh - w0)
+    logv_new = (w0 - lh) / (uh - w0)
 
-for i in range(100):
-    iteration_start_time_SL = time.time()  # Start timing for this iteration
-    
-    w0, logv_new = fcts.BSMART_general(fh, w0, logv_new, tau0, lh, uh)
-    
-    iteration_end_time_SL = time.time()  # End timing for this iteration
-    iteration_time_SL = iteration_end_time_SL - iteration_start_time_SL  # Calculate elapsed time for this iteration
-    
-    iteration_times_SL.append(iteration_time_SL)
-    w0 = val.clone().detach().requires_grad_(True)
-    rel_f_err_SL.append((matrix_norm(w0-x_torch)/matrix_norm(w0)).item())
-    
-    print(f"Iteration {i}: {fh(w0)} - Time: {iteration_time_SL:.6f} seconds")
+    for i in range(100):
+        iteration_start_time_SL = time.time()  # Start timing for this iteration
+        
+        w0, logv_new = fcts.BSMART_general(fh, w0, logv_new, tau0, lh, uh)
+        
+        iteration_end_time_SL = time.time()  # End timing for this iteration
+        iteration_time_SL = iteration_end_time_SL - iteration_start_time_SL  # Calculate elapsed time for this iteration
+        
+        iteration_times_SL.append(iteration_time_SL)
+        w0 = val.clone().detach().requires_grad_(True)
+        rel_f_err_SL.append((matrix_norm(w0-x_torch)/matrix_norm(w0)).item())
+        
+        print(f"Iteration {i}: {fh(w0)} - Time: {iteration_time_SL:.6f} seconds")
 
-overall_end_time_SL = time.time()  # End overall timing
-overall_time_SL = overall_end_time_SL - overall_start_time_SL  # Calculate overall elapsed time
+    overall_end_time_SL = time.time()  # End overall timing
+    overall_time_SL = overall_end_time_SL - overall_start_time_SL  # Calculate overall elapsed time
 
-print(f"Overall time for all iterations: {overall_time_SL:.6f} seconds")
-cumaltive_times_SL = [sum(iteration_times_SL[:i+1]) for i in range(len(iteration_times_SL))]
+    print(f"Overall time for all iterations: {overall_time_SL:.6f} seconds")
+    cumaltive_times_SL = [sum(iteration_times_SL[:i+1]) for i in range(len(iteration_times_SL))]
