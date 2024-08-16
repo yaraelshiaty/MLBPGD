@@ -1,90 +1,106 @@
-import numpy as np
+import torch
+from MGTomo import gridop
 
-def armijo_linesearch(fct,x: np.ndarray,d: np.ndarray,a=1.,r=0.8,c=1e-4):
-  """
+def armijo_linesearch_box(f, x: torch.tensor, d: torch.tensor, a=1., r=0.5, c=1e-3, verbose = True):
+    fx = f(x)
+    fx.backward()
+    dgk = torch.sum(x.grad * d)
+    
+    assert dgk <= 0, 'd needs to be a descent direction (dgk = %.5e)' % dgk
+    
+    if dgk == 0.:
+        return x, 0.
+    
+    while True:
+        x_new = x + a * d
+        
+        mask0 = (torch.abs(x_new) <= 1e-5)
+        x_new[mask0] = 0
+        
+        mask1 = torch.logical_and(x_new > 1, x_new <= 1+1e-5)
+        x_new[mask1] = 1
+        
+        
+        f_new = f(x_new)
+        
+        if f_new <= fx + a * c * dgk:
+            if verbose:
+                print('at a = ', a, 'f_new is <= and x_new.min() = ', x_new.min(), 'with #<0: ', sum(sum(i < 0 for i in x_new)), 'and x_new.max() = ', x_new.max(), 'with #>1: ', sum(sum(i > 1 for i in x_new)))
+            if x_new.min() >= 0 and x_new.max() <= 1:
+                break
+        
+        a *= r
+        if a <= 1e-3:
+            if verbose:
+                print('Armijo step too small, a = 0', 'x_new.min() = ', x_new.min(), ' x_new.argmin()' , (x_new==torch.min(x_new)).nonzero() ,sum(sum(i < 0 for i in x_new)), 'indices < 0')
+                print('Armijo step too small, a = 0', 'x_new.max() = ', x_new.max(), ' x_new.argmax()' , (x_new==torch.max(x_new)).nonzero() ,sum(sum(i > 0 for i in x_new)), 'indices > 1')
+            return x, 0.
+    
+    return x_new, a
 
-  :param fct:  function returns f,g
-  :param x:    current point
-  :param d:    tangent vector
-  :param a:    maximal step
-  :param r:    decreasing factor
-  :param c:    slope
-  :return:
-  """
 
-  f,g = fct(x)
-  dgk = np.sum(g*d)
-  f_new,_ = fct(x + a * d)
-  x_new = x.copy()
+def armijo_linesearch(f, x: torch.tensor, d: torch.tensor, a=1., r = 0.5, c = 1e-3):
+    fx = f(x)
+    fx.backward(retain_graph=True)
+    dgk = torch.sum(x.grad * d)
+    
+    assert dgk <= 0, 'd needs to be a descent direction (dgk = %.5e)' % dgk
+    
+    if dgk == 0.:
+        return x, 0.
+    
+    while True:
+        x_new = x + a * d
+        
+        f_new = f(x_new)
+        
+        if f_new <= fx + a * c * dgk:
+            break
+        
+        a *= r
+        if a <= 1e-7:
+            print('Armijo step too small, a = 0')
+            return x, 0.
+    
+    return x_new, a
 
-  assert dgk <= 0, 'd needs to be a descent direction (dkg = %.5e)' % dgk
+def box_bounds(xh, xH, P_inf, lh, uh, P_nonzero= None):
+    if P_nonzero == None:
+        coarse_dim = xH.shape[0]
+        P_nonzero = gridop.compute_nonzero_elements_of_P(coarse_dim)
+    
+    lH = torch.zeros_like(xH)
+    uH = torch.zeros_like(xH)
 
-  if dgk == 0.:
-    return x,0.
+    for col_coord, indices in P_nonzero.items():
+        rows, cols = zip(*indices)
+        
+        rows = torch.tensor(rows)
+        cols = torch.tensor(cols)
+        
+        diffs = xh[rows, cols]
+        lmax = torch.max(lh[rows, cols] - diffs)
+        umin = torch.min(uh[rows, cols] - diffs)
+        
+        lH[col_coord] = xH[col_coord] + lmax / P_inf
+        uH[col_coord] = xH[col_coord] + umin / P_inf
+    return lH, uH
 
-  while f_new > f + a * c * dgk and a > 1e-7:
-    x_new = x + a * d
-    f_new, _ = fct(x_new)
-    a *= r
+def orthant_bounds(xh, xH, P_inf, lh, P_nonzero = None):
+    if P_nonzero == None:
+        coarse_dim = xH.shape[0]
+        P_nonzero = gridop.compute_nonzero_elements_of_P(coarse_dim)
+    
+    lH = torch.zeros_like(xH)
 
-  if f_new < f :
-    return x_new, np.minimum(a/r,a)
-  else:
-    return x,0.
-
-
-def armijo_manifold_linesearch(fct,retr,x: np.ndarray,rg: np.ndarray, d: np.ndarray,a=1.,r=0.8,c=1e-4):
-  """
-
-  :param fct:  function returns f,g
-  :param retr: retraction
-  :param x:    current point
-  :param rg:   Riemannian gradient
-  :param d:    tangent vector
-  :param a:    maximal step
-  :param r:    decreasing factor
-  :param c:    slope
-  :return:
-  """
-  f, _ = fct(x)
-  dgk = np.sum(rg*d)
-
-  x_new = retr(a * d)
-  f_new, _ = fct(x_new)
-
-  assert dgk <= 0, 'd needs to be a descent direction (dkg = %.5e)' % dgk
-
-  if dgk == 0.:
-    return x,0.
-
-  while f_new > f + a * c * dgk and a > 1e-7:
-    x_new = retr(a*d)
-    f_new, _ = fct(x_new)
-    a *= r
-
-  if f_new < f :
-    return x_new, np.minimum(a/r,a)
-  else:
-    return x,0.
-
-if __name__ == '__main__' :
-
-  A = np.random.rand(3,5)
-  At = np.transpose(A)
-  x = np.random.rand(5,1)
-  b = np.dot(A,x)
-
-  def fobj(x):
-    y = np.dot(A,x) - b
-    f = 0.5*np.linalg.norm(y,2)**2
-    g = np.dot(At,y)
-    return  f,g
-
-  x = np.zeros((5,1))
-  for i in range(100):
-    f,g = fobj(x)
-    g = g/np.linalg.norm(g,'fro')
-    x,a = armijo_linesearch(fobj,x,np.multiply(g,-1.))
-    print('%d -> %.5e  %.5e ' % (i,f,a,))
-    if a < 1e-15 :
-      break
+    for col_coord, indices in P_nonzero.items():
+        rows, cols = zip(*indices)
+        
+        rows = torch.tensor(rows)
+        cols = torch.tensor(cols)
+        
+        diffs = xh[rows, cols]
+        lmax = torch.max(lh[rows, cols] - diffs)
+        
+        lH[col_coord] = xH[col_coord] + lmax / P_inf
+    return lH

@@ -1,12 +1,61 @@
 import astra
 import numpy as np
 
+import torch 
+import torch.nn as nn
+
+class AstraLinearFunction(torch.autograd.Function):
+    
+    @staticmethod
+    def forward(ctx, tomo_matrix, input_vector):
+        # Perform the sparse matrix-vector multiplication
+        output = tomo_matrix.matvec(input_vector.cpu().numpy())
+        output = np.float64(output)
+        # Save the custom sparse matrix and input vector for backward pass
+        ctx.tomo_matrix = tomo_matrix
+        return torch.from_numpy(output)
+    
+    @staticmethod
+    def backward(ctx, grad_output):
+        tomo_matrix = ctx.tomo_matrix
+        # Compute the gradient with respect to the input vector
+        grad_input_vector = tomo_matrix.rmatvec(grad_output.cpu().numpy())
+        # Return gradients for each input
+        # Note: Since custom_sparse_matrix is not a tensor that requires gradients,
+        # we return None for its gradient
+        return None, torch.from_numpy(grad_input_vector)
+
+
+class TomoTorch(nn.Module):
+    def __init__(self, tomop):
+        super(TomoTorch, self).__init__()
+        self.tomop = tomop
+        self.shape = self.tomop.shape
+        self.dtype = self.tomop.dtype
+        
+    def forward(self, v):
+        return AstraLinearFunction.apply(self.tomop, v)
+    
+    def sumnorm(self):
+        dim = int(np.sqrt(self.shape[1]))
+        max_sum = 0
+        
+        for i in range(dim):
+            for j in range(dim):
+                E_ij = torch.zeros(dim, dim)
+                E_ij[i, j] = 1
+                col = self.forward(E_ij)
+                col_sum = torch.sum(torch.abs(col))
+                if col_sum > max_sum:
+                    max_sum = col_sum
+        return max_sum
+
 class TomoParallel(object):
   def __init__(self, proj_geom, vol_geom, mode='line'):
     self.proj_id = astra.create_projector(mode, proj_geom, vol_geom)
     self.shape = (proj_geom['DetectorCount'] * len(proj_geom['ProjectionAngles']),
                   vol_geom['GridColCount'] * vol_geom['GridRowCount'])
-    self.dtype = float
+    self.dtype = float 
 
   def matvec(self, v):
     sid, s = astra.create_sino(v, self.proj_id) # np.reshape(v, (vol_geom['GridRowCount'], vol_geom['GridColCount']))
