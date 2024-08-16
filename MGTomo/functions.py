@@ -85,3 +85,25 @@ def BSMART_general(f, x: torch.tensor, logv, tau, l, u):
         return x, logv
     
     return x_new, logv_new
+
+def Poisson_LIP(f, x: torch.tensor, tau):
+    fx = f(x)
+    fx.backward(retain_graph=True)
+    xgrad = x.grad
+
+    with torch.no_grad():
+        val = torch.reciprocal(torch.reciprocal(x) + tau * xgrad)
+    return val
+
+def mirror_descent_IS(f, x:torch.tensor, tau, l):
+    fx = f(x)
+    fx.backward(retain_graph=True)
+    xgrad = x.grad
+
+    with torch.no_grad():
+        x_new = l + torch.reciprocal(torch.reciprocal(x-l) + tau * xgrad)
+
+    if (f(x_new) - fx).abs() < 1e-2*5:
+        return x
+    
+    return x_new

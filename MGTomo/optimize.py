@@ -30,7 +30,7 @@ def armijo_linesearch_box(f, x: torch.tensor, d: torch.tensor, a=1., r=0.5, c=1e
                 break
         
         a *= r
-        if a <= 1e-7:
+        if a <= 1e-3:
             if verbose:
                 print('Armijo step too small, a = 0', 'x_new.min() = ', x_new.min(), ' x_new.argmin()' , (x_new==torch.min(x_new)).nonzero() ,sum(sum(i < 0 for i in x_new)), 'indices < 0')
                 print('Armijo step too small, a = 0', 'x_new.max() = ', x_new.max(), ' x_new.argmax()' , (x_new==torch.max(x_new)).nonzero() ,sum(sum(i > 0 for i in x_new)), 'indices > 1')
@@ -85,3 +85,22 @@ def box_bounds(xh, xH, P_inf, lh, uh, P_nonzero= None):
         lH[col_coord] = xH[col_coord] + lmax / P_inf
         uH[col_coord] = xH[col_coord] + umin / P_inf
     return lH, uH
+
+def orthant_bounds(xh, xH, P_inf, lh, P_nonzero = None):
+    if P_nonzero == None:
+        coarse_dim = xH.shape[0]
+        P_nonzero = gridop.compute_nonzero_elements_of_P(coarse_dim)
+    
+    lH = torch.zeros_like(xH)
+
+    for col_coord, indices in P_nonzero.items():
+        rows, cols = zip(*indices)
+        
+        rows = torch.tensor(rows)
+        cols = torch.tensor(cols)
+        
+        diffs = xh[rows, cols]
+        lmax = torch.max(lh[rows, cols] - diffs)
+        
+        lH[col_coord] = xH[col_coord] + lmax / P_inf
+    return lH
