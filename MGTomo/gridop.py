@@ -29,7 +29,6 @@ def R(input_image):
 
     return output_image.squeeze(0).squeeze(0)
 
-import torch
 
 def compute_nonzero_elements_of_P(input_size):
     # Define the bilinear interpolation kernel (normalized)
