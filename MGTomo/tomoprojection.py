@@ -37,12 +37,16 @@ class TomoTorch(nn.Module):
         return AstraLinearFunction.apply(self.tomop, v)
     
     def sumnorm(self):
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         dim = int(np.sqrt(self.shape[1]))
         max_sum = 0
+
+        E_ij = torch.zeros(dim, dim, device=device)
         
         for i in range(dim):
+            print(i)
             for j in range(dim):
-                E_ij = torch.zeros(dim, dim)
+                E_ij.zero_()
                 E_ij[i, j] = 1
                 col = self.forward(E_ij)
                 col_sum = torch.sum(torch.abs(col))

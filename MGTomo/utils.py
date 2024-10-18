@@ -4,10 +4,10 @@ import numpy as np
 def myexp(x):
     return torch.exp(torch.minimum(torch.maximum(x, torch.tensor(-80.0)),torch.tensor(80.0)))
 
-def mylog(x, delta=torch.tensor(1e-20)):
+def mylog(x, delta=torch.tensor(1e-20, dtype = torch.float32)):
     #return torch.log(torch.maximum(x, delta))
     mask = x < delta
-    x = torch.where(mask, delta, x)
+    x = torch.where(mask, delta, x.float())
     return torch.log(x + delta)
 
 #umweg bc torch.divide doesn't have where keyword argument
