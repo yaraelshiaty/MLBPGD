@@ -22,8 +22,8 @@ hparams = {
     "image": "camera",
     "CC": "v2",
     "N": 1023,
-    "max_levels": 3,
-    "maxIter": [1,1,1,32,64,123],
+    "max_levels": 5,
+    "maxIter": [1,2,16,32,64,128],
     "kernel_size": 33,
     "sigma": 10,
     "poisson_lbd": 50,
@@ -182,7 +182,7 @@ for i in range(hparams['ML_iterate_count']):
     z0.grad = None
 
     if i in hparams["ML_image_indices"]:
-        log_writer.add_image(f'ML_iter_{i}', z0, global_step=i, dataformats='HW')
+        log_writer.add_image(f'ML_iter', z0, global_step=i, dataformats='HW')
 
     print(f"Iteration {i}: {fh(z0)} - Time: {iteration_time_ML:.6f} seconds")
 
@@ -190,7 +190,7 @@ print(f"Overall time for all iterations: {sum(iteration_times_ML):.6f} seconds")
 cumaltive_times_ML = [sum(iteration_times_ML[:i+1]) for i in range(len(iteration_times_ML))]
 
 ##########
-np.savez(ckpt_path_ML, iteration_times_ML = iteration_times_ML, norm_fval_ML = norm_fval, norm_grad_ML = norm_grad, rel_f_err_ML = rel_f_err)
+np.savez(ckpt_path_ML, iteration_times_ML = iteration_times_ML, norm_fval_ML = norm_fval, norm_grad_ML = norm_grad, rel_f_err_ML = rel_f_err, last_iterate_ML = z0.detach().numpy())
 ##########
 
 
@@ -233,7 +233,7 @@ for i in range(hparams['SL_iterate_count']):
     log_writer.add_scalar("SL_normalised_gradient", norm_grad_SL[-1], i)
 
     if i in hparams["SL_image_indices"]:
-        log_writer.add_image(f'SL_iter_{i}', w0, global_step=i, dataformats='HW')
+        log_writer.add_image(f'SL_iter', w0, global_step=i, dataformats='HW')
 
     print(f"Iteration {i}: {fh(w0)} - Time: {iteration_time_SL:.6f} seconds")
 
@@ -241,7 +241,7 @@ print(f"Overall time for all iterations: {sum(iteration_times_SL):.6f} seconds")
 cumaltive_times_SL = [sum(iteration_times_SL[:i+1]) for i in range(len(iteration_times_SL))]
 
 ##########
-np.savez(ckpt_path_SL, iteration_times_SL = iteration_times_SL, norm_fval_SL = norm_fval_SL, norm_grad_SL = norm_grad_SL, rel_f_err_SL = rel_f_err_SL)
+np.savez(ckpt_path_SL, iteration_times_SL = iteration_times_SL, norm_fval_SL = norm_fval_SL, norm_grad_SL = norm_grad_SL, rel_f_err_SL = rel_f_err_SL, last_iterate_SL = w0.detach().numpy())
 ##########
 
 plt.figure(figsize=(10, 6))
