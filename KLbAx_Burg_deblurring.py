@@ -1,7 +1,7 @@
 import MGBlurr.blurring as blur
 import MGTomo.functions as fcts
-from MGTomo.utils import mylog, mydiv
-from MGTomo.optimize import armijo_linesearch, box_bounds, orthant_bounds
+from MGTomo.coarse_corrections import coarse_condition_v2
+from MGTomo.optimize import armijo_linesearch, orthant_bounds_optimized
 from MGTomo.gridop import RBox as R, PBox as P
 from MGTomo import gridop
 
@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
-from torch.linalg import matrix_norm
+from torch.linalg import norm
 
 import time
 import datetime
@@ -28,12 +28,12 @@ hparams = {
     "sigma": 10,
     "poisson_lbd": 50,
     "P_inf" : 1,
-    "SL_iterate_count": 1000,
-    "ML_iterate_count": 100,
+    "SL_iterate_count": 10,
+    "ML_iterate_count": 3,
     "kappa": 0.45,
     "eps": 0.001,
-    "SL_image_indices": range(0,1000, 100),
-    "ML_image_indices": range(0,100,10)
+    "SL_image_indices": range(0,10, 10),
+    "ML_image_indices": range(0,3,3)
 }
 
 # load image
@@ -57,31 +57,8 @@ for i in range(1, hparams["max_levels"]+1):
     P_nonzero.append(gridop.compute_nonzero_elements_of_P(coarse_dim))
     fine_dim = coarse_dim
 
-def kl_distance_rev(x: torch.tensor, b: torch.tensor, A):
-    ax = A(x)
-    ax.requires_grad_(True)
-    ba = mydiv(b,ax)
-    
-    erg = b * mylog(ba) - b + ax
-    fx = torch.sum( erg[ax > 0.]) + 0.5*torch.sum(b[ax == 0.]**2)
-    assert fx >= 0, fx
-    return fx.requires_grad_(True)
-
-fh = lambda x: kl_distance_rev(x, b[0], A[0])
-tau = [0.5 * torch.reciprocal(matrix_norm(bi, ord = 1)) for bi in b]
-
-def coarse_condition_v2(y, grad_y, kappa, eta, y_last = None):
-    with torch.no_grad():
-        gcond = (matrix_norm(R(grad_y)) >= kappa * matrix_norm(grad_y))
-        if gcond:
-            if y_last is not None:
-                y_diff_norm = matrix_norm(y_last - y)
-                y_norm = matrix_norm(y)
-                return (y_diff_norm >= eta * y_norm)
-            return True
-        else:
-            return False
-
+fh = lambda x: fcts.kl_distance_rev(x, b[0], A[0])
+tau = [0.5 * torch.reciprocal(norm(bi, ord = 1)) for bi in b]
 
 def MLO_orthant(fh, y, lh, last_pts: list, l=0, kappa = hparams["kappa"], eps = hparams["eps"]):
     x = R(y).detach().requires_grad_(True)
@@ -92,13 +69,12 @@ def MLO_orthant(fh, y, lh, last_pts: list, l=0, kappa = hparams["kappa"], eps = 
     y.grad = None
     
     if coarse_condition_v2(y, grad_fhy0, kappa, eps, last_pts[l]):
-    #if coarse_condition_v3(grad_fhy0, kappa, eps):
     #if True:
         print(l, ' : coarse correction activated')
         last_pts[l] = y.detach()
     
         x0 = x.detach().requires_grad_(True)
-        fH = lambda x: kl_distance_rev(x, b[l+1], A[l+1])
+        fH = lambda x: fcts.kl_distance_rev(x, b[l+1], A[l+1])
         fHx0 = fH(x0)
         fHx0.backward(retain_graph = True)
         grad_fHx0 = x0.grad.clone()
@@ -110,7 +86,7 @@ def MLO_orthant(fh, y, lh, last_pts: list, l=0, kappa = hparams["kappa"], eps = 
 
         with torch.no_grad():
             psi = lambda x: fH(x) + torch.sum(kappa * x)
-            lH = orthant_bounds(y, x, hparams["P_inf"], lh, P_nonzero[l])
+            lH = orthant_bounds_optimized(y, x, hparams["P_inf"], lh, P_nonzero[l])
         
         for i in range(hparams["maxIter"][l+1]):
             #x.retain_grad()
@@ -153,7 +129,7 @@ last_pts = [None]*(hparams["max_levels"]+1)
 lh = torch.zeros_like(z0)
 
 rel_f_err = []
-rel_f_err.append((matrix_norm(z0 - x_torch)/matrix_norm(z0)).item())
+rel_f_err.append((norm(z0 - x_torch, 'fro')/norm(z0, 'fro')).item())
 
 norm_fval = []
 norm_fval.append(torch.tensor(1.))
@@ -161,7 +137,7 @@ norm_fval.append(torch.tensor(1.))
 fhz = fh(z0)
 
 fhz.backward(retain_graph=True)
-Gz0 = matrix_norm(z0.grad)
+Gz0 = norm(z0.grad, 'fro')
 z0.grad = None
 
 norm_grad = []
@@ -179,12 +155,12 @@ for i in range(hparams['ML_iterate_count']):
 
     iteration_times_ML.append(iteration_time_ML)
     z0 = val.clone().detach().requires_grad_(True)
-    rel_f_err.append((matrix_norm(z0-x_torch)/matrix_norm(z0)).item())
+    rel_f_err.append((norm(z0-x_torch, 'fro')/norm(z0, 'fro')).item())
     fval = fh(z0)
     norm_fval.append((fval/fhz).item())
     log_writer.add_scalar("ML_normalised_value", norm_fval[-1], i)
     fval.backward(retain_graph=True)
-    norm_grad.append((matrix_norm(z0.grad)/Gz0).item())
+    norm_grad.append((norm(z0.grad, 'fro')/Gz0).item())
     log_writer.add_scalar("ML_normalised_gradient", norm_grad[-1], i)
     z0.grad = None
 
@@ -208,7 +184,7 @@ lh = torch.zeros_like(w0)
 fhw = fh(w0)
 w0.retain_grad()
 fhw.backward(retain_graph=True)
-Gw0 = matrix_norm(w0.grad)
+Gw0 = norm(w0.grad, 'fro')
 w0.grad = None
 
 iteration_times_SL = []
@@ -218,7 +194,7 @@ norm_grad_SL = []
 norm_grad_SL.append(torch.tensor(1.))
 
 rel_f_err_SL = []
-rel_f_err_SL.append((matrix_norm(w0 - x_torch)/matrix_norm(w0)).item())
+rel_f_err_SL.append((norm(w0 - x_torch, 'fro')/norm(w0, 'fro')).item())
 
 norm_fval_SL = []
 norm_fval_SL.append(torch.tensor(1.))
@@ -237,10 +213,10 @@ for i in range(hparams['SL_iterate_count']):
     norm_fval_SL.append((fval/fhw).item())
     log_writer.add_scalar("SL_normalised_value", norm_fval_SL[-1], i)
     fval.backward(retain_graph=True)
-    norm_grad_SL.append((matrix_norm(w0.grad)/Gw0).item())
+    norm_grad_SL.append((norm(w0.grad, 'fro')/Gw0).item())
     log_writer.add_scalar("SL_normalised_gradient", norm_grad_SL[-1], i)
     w0.grad = None
-    rel_f_err_SL.append((matrix_norm(w0 - x_torch)/matrix_norm(w0)).item())
+    rel_f_err_SL.append((norm(w0 - x_torch, 'fro')/norm(w0, 'fro')).item())
 
     if i in hparams["SL_image_indices"]:
         log_writer.add_image(f'SL_iter', w0, global_step=i, dataformats='HW')

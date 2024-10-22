@@ -1,6 +1,5 @@
 import torch
 import torch.nn.functional as F
-import astra
 
 import MGTomo.tomoprojection as mgproj
 from MGTomo.utils import myexp, mylog, mydiv
@@ -12,7 +11,6 @@ def kl_distance(x: torch.tensor, proj: mgproj.TomoTorch, b: torch.tensor):
     
     erg = ax * mylog(ab) + b - ax
     fx = torch.sum( erg[b > 0.] ) + 0.5*torch.sum(ax[b == 0.]**2)
-    #fx = torch.sum(erg[b > 0.])
     assert fx >= 0, fx
     #assert fx >= 0, 'kl distance error: output is negative.'
     return fx.requires_grad_(True)
@@ -25,11 +23,27 @@ def kl_distance_no_matrix(x: torch.tensor, y: torch.tensor):
     assert fx >= 0, fx
     return fx.requires_grad_(True)
 
-def kl_distance_v2(x: torch.tensor, proj: mgproj.TomoTorch, b: torch.tensor):
-    ax = proj(x)
-    erg = ax * (mylog(ax) - mylog(b)) + b - ax
-    fx = torch.sum( erg[b > 0.] ) + 0.5*torch.sum(ax[b == 0.]**2)
-    assert fx >= 0, 'kl distance error: output is negative.'
+def kl_distance_rev(x: torch.tensor, b: torch.tensor, A: mgproj.TomoTorch):
+    ax = A(x)
+    ax.requires_grad_(True)
+    ba = mydiv(b,ax)
+    
+    erg = b * mylog(ba) - b + ax
+    fx = torch.sum( erg[ax > 0.]) + 0.5*torch.sum(b[ax == 0.]**2)
+    assert fx >= 0, fx
+    return fx.requires_grad_(True)
+
+def kl_distance_rev_pointwise(x: torch.tensor, b: torch.tensor, A):
+    if not torch.is_tensor(A):
+        A = torch.tensor(A)
+    ax = A*x
+    ax.requires_grad_(True)
+    ba = mydiv(b,ax)
+    
+    erg = b * mylog(ba) - b + ax
+    fx = torch.sum( erg[ax > 0.]) + 0.5*torch.sum(b[ax == 0.]**2)
+    assert fx >= 0, fx
+    #assert fx >= 0, 'kl distance error: output is negative.'
     return fx.requires_grad_(True)
 
 def SMART(f, x: torch.tensor, tau):

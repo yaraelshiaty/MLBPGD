@@ -2,8 +2,8 @@ import MGTomo.model as mgmodel
 import MGTomo.tomoprojection as mgproj
 from MGTomo.utils import mylog
 import MGTomo.functions as fcts
-from MGTomo.optimize import armijo_linesearch, box_bounds
-
+from MGTomo.optimize import armijo_linesearch, box_bounds_optimized
+from MGTomo.coarse_corrections import coarse_condition_v2
 from MGTomo.gridop import RBox as R, PBox as P
 
 from MGTomo import gridop
@@ -11,7 +11,7 @@ from MGTomo import gridop
 import time
 import numpy as np
 import torch
-from torch.linalg import matrix_norm
+from torch.linalg import norm
 from torch.utils.tensorboard import SummaryWriter
 
 import matplotlib.pyplot as plt 
@@ -30,12 +30,12 @@ hparams = {
     "tau" : [0.0005, 0.001, 0.001, 0.0045, 0.0091, 0.0185],
     "num_angels0": 200,
     "P_inf" : 1,
-    "SL_iterate_count": 100,
-    "ML_iterate_count": 20,
+    "SL_iterate_count": 10,
+    "ML_iterate_count": 5,
     "kappa": 0.45,
     "eps": 0.001,
-    "SL_image_indices": range(0,100, 100),
-    "ML_image_indices": range(0,20,5)
+    "SL_image_indices": range(0,10,10),
+    "ML_image_indices": range(0,5,5)
 }
 
 x_orig = data.shepp_logan_phantom()
@@ -67,20 +67,7 @@ for i in range(hparams["max_levels"]+1):
     assert b[i].shape[0]*b[i].shape[1] == A[i].shape[0], 'dimension mismatch'
     print(f'level {i}:', b[i].shape[0], np.sqrt(A[i].shape[1]))
 
-
 fh = lambda x: fcts.kl_distance(x, A[0], b[0])
-
-def coarse_condition_v2(y, grad_y, kappa, eta, y_last = None):
-    with torch.no_grad():
-        gcond = (matrix_norm(R(grad_y)) >= kappa * matrix_norm(grad_y))
-        if gcond:
-            if y_last is not None:
-                y_diff_norm = matrix_norm(y_last - y)
-                y_norm = matrix_norm(y)
-                return (y_diff_norm >= eta * y_norm)
-            return True
-        else:
-            return False
 
 def MLO_box(fh, y, lh, uh, last_pts: list, l=0, kappa = hparams["kappa"], eps = hparams["eps"]):
     x = R(y).detach().requires_grad_(True)
@@ -107,7 +94,7 @@ def MLO_box(fh, y, lh, uh, last_pts: list, l=0, kappa = hparams["kappa"], eps = 
 
         with torch.no_grad():
             psi = lambda x: fH(x) + torch.sum(kappa * x)
-            lH, uH = box_bounds(y, x, hparams["P_inf"], lh, uh, P_nonzero[l])
+            lH, uH = box_bounds_optimized(y, x, hparams["P_inf"], lh, uh, P_nonzero[l])
 
         logvH_new = mylog(x - lH) - mylog(uH - x)
         for i in range(hparams["maxIter"][l+1]):
@@ -154,7 +141,7 @@ lh = torch.zeros_like(z0)
 uh = torch.ones_like(z0)
 
 rel_f_err = []
-rel_f_err.append((matrix_norm(z0 - x_torch)/matrix_norm(z0)).item())
+rel_f_err.append((norm(z0 - x_torch, 'fro')/norm(z0, 'fro')).item())
 
 norm_fval = []
 norm_fval.append(torch.tensor(1.))
@@ -162,7 +149,7 @@ norm_fval.append(torch.tensor(1.))
 fhz = fh(z0)
 
 fhz.backward(retain_graph=True)
-Gz0 = matrix_norm(z0.grad)
+Gz0 = norm(z0.grad, 'fro')
 z0.grad = None
 
 norm_grad = []
@@ -180,12 +167,12 @@ for i in range(hparams['ML_iterate_count']):
 
     iteration_times_ML.append(iteration_time_ML)
     z0 = val.clone().detach().requires_grad_(True)
-    rel_f_err.append((matrix_norm(z0-x_torch)/matrix_norm(z0)).item())
+    rel_f_err.append((norm(z0-x_torch, 'fro')/norm(z0, 'fro')).item())
     fval = fh(z0)
     norm_fval.append((fval/fhz).item())
     log_writer.add_scalar("ML_normalised_value", norm_fval[-1], i)
     fval.backward(retain_graph=True)
-    norm_grad.append((matrix_norm(z0.grad)/Gz0).item())
+    norm_grad.append((norm(z0.grad, 'fro')/Gz0).item())
     log_writer.add_scalar("ML_normalised_gradient", norm_grad[-1], i)
     z0.grad = None
 
@@ -206,11 +193,11 @@ w0 = torch.ones(hparams["N"], hparams["N"], requires_grad = True)*0.5
 fhw = fh(w0)
 w0.retain_grad()
 fhw.backward(retain_graph=True)
-Gw0 = matrix_norm(w0.grad)
-logv_new = (w0 - lh) / (uh - w0)
+Gw0 = norm(w0.grad, 'fro')
+logv_new = mylog((w0 - lh)) - mylog((uh - w0))
 
 rel_f_err_SL = []
-rel_f_err_SL.append((matrix_norm(w0 - x_torch)/matrix_norm(w0)).item())
+rel_f_err_SL.append((norm(w0 - x_torch, 'fro')/norm(w0, 'fro')).item())
 
 norm_fval_SL = []
 norm_fval_SL.append(torch.tensor(1.))
@@ -232,12 +219,12 @@ for i in range(hparams['SL_iterate_count']):
     iteration_times_SL.append(iteration_time_SL)
     w0 = val.clone().detach().requires_grad_(True)
 
-    rel_f_err_SL.append((matrix_norm(w0-x_torch)/matrix_norm(w0)).item())
+    rel_f_err_SL.append((norm(w0-x_torch, 'fro')/norm(w0, 'fro')).item())
     fval = fh(w0)
     norm_fval_SL.append((fval/fhw).item())
     log_writer.add_scalar("SL_normalised_value", norm_fval_SL[-1], i)
     fval.backward(retain_graph=True)
-    norm_grad_SL.append((matrix_norm(w0.grad)/Gw0).item())
+    norm_grad_SL.append((norm(w0.grad, 'fro')/Gw0).item())
     log_writer.add_scalar("SL_normalised_gradient", norm_grad_SL[-1], i)
 
     if i in hparams["SL_image_indices"]:

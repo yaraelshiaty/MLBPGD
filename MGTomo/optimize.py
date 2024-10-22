@@ -1,4 +1,5 @@
 import torch
+import torch_scatter
 from MGTomo import gridop
 
 def armijo_linesearch_box(f, x: torch.tensor, d: torch.tensor, a=1., r=0.5, c=1e-3, verbose = True):
@@ -87,7 +88,7 @@ def box_bounds(xh, xH, P_inf, lh, uh, P_nonzero= None):
     return lH, uH
 
 def orthant_bounds(xh, xH, P_inf, lh, P_nonzero = None):
-    if P_nonzero == None:
+    if P_nonzero is None:
         coarse_dim = xH.shape[0]
         P_nonzero = gridop.compute_nonzero_elements_of_P(coarse_dim)
     
@@ -104,3 +105,68 @@ def orthant_bounds(xh, xH, P_inf, lh, P_nonzero = None):
         
         lH[col_coord] = xH[col_coord] + lmax / P_inf
     return lH
+
+def orthant_bounds_optimized(xh, xH, P_inf, lh, P_nonzero=None):
+    coarse_dim = xH.shape[0]
+    if P_nonzero is None:
+        P_nonzero = gridop.compute_nonzero_elements_of_P(coarse_dim)
+    lH = torch.zeros_like(xH)
+
+    all_rows = []
+    all_cols = []
+    col_coords_flat = []
+    col_coords = []
+
+    for (x,y), indices in P_nonzero.items():
+        rows, cols = zip(*indices)
+        all_rows.extend(rows)
+        all_cols.extend(cols)
+        col_coords_flat.extend([x*coarse_dim + y]*len(rows))
+        col_coords.append((x,y))
+
+    all_rows_tensor = torch.tensor(all_rows)
+    all_cols_tensor = torch.tensor(all_cols)
+    all_col_coords = torch.tensor(col_coords_flat)
+
+    rowsH_tensor, colsH_tensor = torch.tensor(col_coords).unbind(dim=1)
+
+    diffs = xh[all_rows_tensor, all_cols_tensor]
+  
+    lmax = torch_scatter.scatter_max(lh[all_rows_tensor, all_cols_tensor] - diffs, all_col_coords, dim = 0)[0]
+    lH[rowsH_tensor, colsH_tensor] = xH[rowsH_tensor, colsH_tensor] + lmax / P_inf
+
+    return lH
+
+def box_bounds_optimized(xh, xH, P_inf, lh, uh, P_nonzero=None):
+    coarse_dim = xH.shape[0]
+    if P_nonzero is None:
+        P_nonzero = gridop.compute_nonzero_elements_of_P(coarse_dim)
+    lH = torch.zeros_like(xH)
+    uH = torch.zeros_like(xH)
+
+    all_rows = []
+    all_cols = []
+    col_coords_flat = []
+    col_coords = []
+
+    for (x,y), indices in P_nonzero.items():
+        rows, cols = zip(*indices)
+        all_rows.extend(rows)
+        all_cols.extend(cols)
+        col_coords_flat.extend([x*coarse_dim + y]*len(rows))
+        col_coords.append((x,y))
+
+    all_rows_tensor = torch.tensor(all_rows)
+    all_cols_tensor = torch.tensor(all_cols)
+    all_col_coords = torch.tensor(col_coords_flat)
+
+    rowsH_tensor, colsH_tensor = torch.tensor(col_coords).unbind(dim=1)
+
+    diffs = xh[all_rows_tensor, all_cols_tensor]
+  
+    lmax = torch_scatter.scatter_max(lh[all_rows_tensor, all_cols_tensor] - diffs, all_col_coords, dim = 0)[0]
+    umin = torch_scatter.scatter_min(uh[all_rows_tensor, all_cols_tensor] - diffs, all_col_coords, dim = 0)[0]
+    lH[rowsH_tensor, colsH_tensor] = xH[rowsH_tensor, colsH_tensor] + lmax / P_inf
+    uH[rowsH_tensor, colsH_tensor] = xH[rowsH_tensor, colsH_tensor] + umin / P_inf
+
+    return lH, uH
