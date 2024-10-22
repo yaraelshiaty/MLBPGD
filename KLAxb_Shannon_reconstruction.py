@@ -25,17 +25,16 @@ hparams = {
     "image": "shepp_logan",
     "CC": "v2",
     "N": 1023,
-    "max_levels": 3,
-    "maxIter": [1,2,4,8,16,32],
-    "tau" : [0.0005, 0.001, 0.001, 0.0045, 0.0091, 0.0185],
+    "max_levels": 2,
+    "maxIter": [1,10,10,16,32,128],
     "num_angels0": 200,
     "P_inf" : 1,
-    "SL_iterate_count": 10,
-    "ML_iterate_count": 5,
+    "SL_iterate_count": 40,
+    "ML_iterate_count": 10,
     "kappa": 0.45,
     "eps": 0.001,
-    "SL_image_indices": range(0,10,10),
-    "ML_image_indices": range(0,5,5)
+    "SL_image_indices": range(0,40,10),
+    "ML_image_indices": range(0,10)
 }
 
 x_orig = data.shepp_logan_phantom()
@@ -68,6 +67,7 @@ for i in range(hparams["max_levels"]+1):
     print(f'level {i}:', b[i].shape[0], np.sqrt(A[i].shape[1]))
 
 fh = lambda x: fcts.kl_distance(x, A[0], b[0])
+tau = [torch.reciprocal(Ai.sumnorm_opt()) * 0.5 for Ai in A]
 
 def MLO_box(fh, y, lh, uh, last_pts: list, l=0, kappa = hparams["kappa"], eps = hparams["eps"]):
     x = R(y).detach().requires_grad_(True)
@@ -99,7 +99,7 @@ def MLO_box(fh, y, lh, uh, last_pts: list, l=0, kappa = hparams["kappa"], eps = 
         logvH_new = mylog(x - lH) - mylog(uH - x)
         for i in range(hparams["maxIter"][l+1]):
             #x.retain_grad()
-            val, logvH_new = fcts.BSMART_general(psi, x, logvH_new, hparams["tau"][l+1], lH, uH)
+            val, logvH_new = fcts.BSMART_general(psi, x, logvH_new, tau[l+1], lH, uH)
             x = val.detach().requires_grad_(True)
             del val
             x.grad = None
@@ -117,7 +117,7 @@ def MLO_box(fh, y, lh, uh, last_pts: list, l=0, kappa = hparams["kappa"], eps = 
     
     for i in range(hparams["maxIter"][l]):
         #y.retain_grad()
-        yval, logvh_new = fcts.BSMART_general(fh, y, logvh_new, hparams["tau"][l], lh, uh)
+        yval, logvh_new = fcts.BSMART_general(fh, y, logvh_new, tau[l], lh, uh)
         y = yval.detach().requires_grad_(True)
         del yval
         y.grad = None
@@ -127,6 +127,7 @@ def MLO_box(fh, y, lh, uh, last_pts: list, l=0, kappa = hparams["kappa"], eps = 
 # setup logging
 log_dir = "runs/KLAxb_reconstruction/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 log_writer = SummaryWriter(log_dir)
+hparams["tau"] = tau
 log_writer.add_text("hparams", str(hparams))
 ckpt_path_SL = f"{log_writer.log_dir}/SL"
 ckpt_path_ML = f"{log_writer.log_dir}/ML"
@@ -211,7 +212,7 @@ norm_grad_SL.append(torch.tensor(1.))
 for i in range(hparams['SL_iterate_count']):
     iteration_start_time_SL = time.time()  # Start timing for this iteration
     
-    val, logv_new = fcts.BSMART_general(fh, w0, logv_new, hparams["tau"][0], lh, uh)
+    val, logv_new = fcts.BSMART_general(fh, w0, logv_new, tau[0], lh, uh)
     
     iteration_end_time_SL = time.time()  # End timing for this iteration
     iteration_time_SL = iteration_end_time_SL - iteration_start_time_SL  # Calculate elapsed time for this iteration

@@ -122,6 +122,7 @@ def MLO_box(fh, y, lh, uh, last_pts: list, l=0, kappa = 0.45, eps = 0.001):
 # setup logging
 log_dir = "runs/KLAxb_deblurring/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 log_writer = SummaryWriter(log_dir)
+hparams["tau"] = tau
 log_writer.add_text("hparams", str(hparams))
 ckpt_path_SL = f"{log_writer.log_dir}/SL"
 ckpt_path_ML = f"{log_writer.log_dir}/ML"

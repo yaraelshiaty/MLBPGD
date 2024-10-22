@@ -116,6 +116,7 @@ def MLO_orthant(fh, y, lh, last_pts: list, l=0, kappa = hparams["kappa"], eps = 
 # setup logging
 log_dir = "runs/KLbAx_deblurring/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 log_writer = SummaryWriter(log_dir)
+hparams["tau"] = tau
 log_writer.add_text("hparams", str(hparams))
 ckpt_path_SL = f"{log_writer.log_dir}/SL"
 ckpt_path_ML = f"{log_writer.log_dir}/ML"
