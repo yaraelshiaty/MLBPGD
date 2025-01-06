@@ -2,7 +2,7 @@ import MGTomo.model as mgmodel
 import MGTomo.tomoprojection as mgproj
 import MGTomo.functions as fcts
 from MGTomo.optimize import armijo_linesearch, orthant_bounds_optimized
-from MGTomo.coarse_corrections import coarse_condition_v2
+import MGTomo.coarse_corrections as CC
 from MGTomo.gridop import RBox as R, PBox as P
 
 from MGTomo import gridop
@@ -22,7 +22,7 @@ import datetime
 
 hparams = {
     "image": "shepp_logan",
-    "CC": "v2",
+    "CC": "Bregman",
     "N": 1023,
     "max_levels": 5,
     "maxIter": [1,2,4,40,40,40],
@@ -34,8 +34,8 @@ hparams = {
     "eps": 0.001,
     "SL_image_indices": range(0,10,10),
     "ML_image_indices": range(0,5,5),
-    "lbd": 0.7,
-    "rho" : 0.1
+    "lbd": 0.0,
+    "rho" : 0.0
 }
 
 x_orig = data.shepp_logan_phantom()
@@ -74,7 +74,7 @@ else:
 
 tau = [0.5 * torch.reciprocal(norm(bi, ord = 1)) for bi in b]
         
-def MLO_orthant(fh, y, lh, last_pts: list, l=0, kappa = hparams["kappa"], eps = hparams["eps"]):
+def MLO_orthant(fh, y, lh, last_pts: list, y_diff:list, l=0, kappa = hparams["kappa"], eps = hparams["eps"]):
     x = R(y).detach().requires_grad_(True)
     y0 = y.detach().requires_grad_(True)
     fhy0 = fh(y)
@@ -82,7 +82,9 @@ def MLO_orthant(fh, y, lh, last_pts: list, l=0, kappa = hparams["kappa"], eps = 
     grad_fhy0 = y.grad.clone()
     y.grad = None
     
-    if coarse_condition_v2(y, grad_fhy0, kappa, eps, last_pts[l]):
+    CC_bool, y_diff[l] = CC.coarse_condition_bregman_logging(y, grad_fhy0, kappa, eps, last_pts[l])
+
+    if CC_bool:
     #if True:
         print(l, ' : coarse correction activated')
         last_pts[l] = y.detach()
@@ -113,7 +115,7 @@ def MLO_orthant(fh, y, lh, last_pts: list, l=0, kappa = hparams["kappa"], eps = 
             x.grad = None
             
         if l < hparams["max_levels"]-1:
-            x, last_pts = MLO_orthant(psi, x, lH, last_pts, l+1)
+            x, last_pts, y_diff = MLO_orthant(psi, x, lH, last_pts, y_diff, l+1)
 
         d = P(x-x0)
         z, _ = armijo_linesearch(fh, y0, d)
@@ -144,6 +146,7 @@ ckpt_path_ML = f"{log_writer.log_dir}/ML"
 z0 = torch.ones(hparams["N"], hparams["N"]) * 0.5
 z0.requires_grad_(True)
 last_pts = [None]*(hparams["max_levels"]+1)
+y_diff = torch.zeros(hparams['max_levels'])
 
 lh = torch.zeros_like(z0)
 uh = torch.ones_like(z0)
@@ -169,7 +172,7 @@ iteration_times_ML.append(0)
 for i in range(hparams['ML_iterate_count']):
     iteration_start_time_ML = time.time()
     
-    val, ylast = MLO_orthant(fh, z0, lh, last_pts)
+    val, ylast, ydiff = MLO_orthant(fh, z0, lh, last_pts, ydiff)
     iteration_end_time_ML = time.time()
     iteration_time_ML = iteration_end_time_ML - iteration_start_time_ML
 
@@ -186,6 +189,8 @@ for i in range(hparams['ML_iterate_count']):
 
     if i in hparams["ML_image_indices"]:
         log_writer.add_image(f'ML_iter', z0, global_step=i, dataformats='HW')
+    for j in range(len(y_diff)):
+        log_writer.add_scalar(f'CC {j}', y_diff[j], i)
 
     print(f"Iteration {i}: {fh(z0)} - Time: {iteration_time_ML:.6f} seconds")
 
