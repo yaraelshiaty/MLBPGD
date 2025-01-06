@@ -4,7 +4,7 @@ from MGTomo.utils import mylog
 from MGTomo.optimize import armijo_linesearch, box_bounds_optimized
 from MGTomo.gridop import RBox as R, PBox as P
 from MGTomo import gridop
-from MGTomo.coarse_corrections import coarse_condition_v2
+import MGTomo.coarse_corrections as CC
 
 from skimage import data
 from skimage.transform import resize
@@ -21,7 +21,7 @@ import numpy as np
 
 hparams = {
     "image": "camera",
-    "CC": "v2",
+    "CC": "Bregman",
     "N": 1023,
     "max_levels": 3,
     "maxIter": [1,2,16,32,64,128],
@@ -32,7 +32,7 @@ hparams = {
     "SL_iterate_count": 10,
     "ML_iterate_count": 3,
     "kappa": 0.45,
-    "eps": 0.001,
+    "eps": 0.1,
     "SL_image_indices": range(0,10,5),
     "ML_image_indices": range(3)
 }
@@ -72,7 +72,7 @@ def MLO_box(fh, y, lh, uh, last_pts: list, l=0, kappa = 0.45, eps = 0.001):
     grad_fhy0 = y.grad.clone()
     y.grad = None
     
-    if coarse_condition_v2(y, grad_fhy0, kappa, eps, last_pts[l]):
+    if CC.coarse_condition_bregman(y, grad_fhy0, kappa, eps, last_pts[l]):
     #if True:
         print(l, ' : coarse correction activated')
         last_pts[l] = y.clone().detach()

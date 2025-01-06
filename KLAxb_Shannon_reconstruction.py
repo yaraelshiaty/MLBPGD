@@ -3,7 +3,7 @@ import MGTomo.tomoprojection as mgproj
 from MGTomo.utils import mylog
 import MGTomo.functions as fcts
 from MGTomo.optimize import armijo_linesearch, box_bounds_optimized
-from MGTomo.coarse_corrections import coarse_condition_v2
+import MGTomo.coarse_corrections as CC
 from MGTomo.gridop import RBox as R, PBox as P
 
 from MGTomo import gridop
@@ -23,18 +23,18 @@ import datetime
 
 hparams = {
     "image": "shepp_logan",
-    "CC": "v2",
+    "CC": "Bregman",
     "N": 1023,
     "max_levels": 2,
     "maxIter": [1,10,10,16,32,128],
     "num_angels0": 200,
     "P_inf" : 1,
-    "SL_iterate_count": 40,
-    "ML_iterate_count": 10,
-    "kappa": 0.45,
-    "eps": 0.001,
-    "SL_image_indices": range(0,40,10),
-    "ML_image_indices": range(0,10)
+    "SL_iterate_count": 200,
+    "ML_iterate_count": 50,
+    "kappa": 0.49,
+    "eps": 0.5,
+    "SL_image_indices": range(0,200, 50),
+    "ML_image_indices": range(0,50, 50)
 }
 
 x_orig = data.shepp_logan_phantom()
@@ -69,15 +69,17 @@ for i in range(hparams["max_levels"]+1):
 fh = lambda x: fcts.kl_distance(x, A[0], b[0])
 tau = [torch.reciprocal(Ai.sumnorm_opt()) * 0.5 for Ai in A]
 
-def MLO_box(fh, y, lh, uh, last_pts: list, l=0, kappa = hparams["kappa"], eps = hparams["eps"]):
+def MLO_box(fh, y, lh, uh, last_pts: list, y_diff:list, l=0, kappa = hparams["kappa"], eps = hparams["eps"]):
     x = R(y).detach().requires_grad_(True)
     fhy0 = fh(y)
     #fhy0.backward(retain_graph = True)
     fhy0.backward()
     grad_fhy0 = y.grad.clone()
     y.grad = None
+
+    CC_bool, y_diff[l] = CC.coarse_condition_bregman_logging(y, grad_fhy0, kappa, eps, last_pts[l])
     
-    if coarse_condition_v2(y, grad_fhy0, kappa, eps, last_pts[l]):
+    if CC_bool:
     #if True:
         print(l, ' : coarse correction activated')
         last_pts[l] = y.clone().detach()
@@ -105,7 +107,7 @@ def MLO_box(fh, y, lh, uh, last_pts: list, l=0, kappa = hparams["kappa"], eps = 
             x.grad = None
             
         if l < hparams["max_levels"]-1:
-            x, last_pts = MLO_box(psi, x,lH, uH, last_pts, l+1)
+            x, last_pts, y_diff = MLO_box(psi, x,lH, uH, last_pts, y_diff, l+1)
 
         d = P(x-x0)
         z, _ = armijo_linesearch(fh, y, d)
@@ -121,7 +123,7 @@ def MLO_box(fh, y, lh, uh, last_pts: list, l=0, kappa = hparams["kappa"], eps = 
         y = yval.detach().requires_grad_(True)
         del yval
         y.grad = None
-    return y, last_pts
+    return y, last_pts, y_diff
 
 ################
 # setup logging
@@ -137,6 +139,7 @@ ckpt_path_ML = f"{log_writer.log_dir}/ML"
 z0 = torch.ones(hparams["N"], hparams["N"]) * 0.5
 z0.requires_grad_(True)
 last_pts = [None]*(hparams["max_levels"]+1)
+y_diff = torch.zeros(hparams['max_levels'])
 
 lh = torch.zeros_like(z0)
 uh = torch.ones_like(z0)
@@ -145,16 +148,18 @@ rel_f_err = []
 rel_f_err.append((norm(z0 - x_torch, 'fro')/norm(z0, 'fro')).item())
 
 norm_fval = []
-norm_fval.append(torch.tensor(1.))
+#norm_fval.append(torch.tensor(1.))
 
 fhz = fh(z0)
+norm_fval.append(fhz)
 
 fhz.backward(retain_graph=True)
 Gz0 = norm(z0.grad, 'fro')
 z0.grad = None
 
 norm_grad = []
-norm_grad.append(torch.tensor(1.))
+#norm_grad.append(torch.tensor(1.))
+norm_grad.append(Gz0)
 
 iteration_times_ML = []
 iteration_times_ML.append(0)
@@ -162,7 +167,7 @@ iteration_times_ML.append(0)
 for i in range(hparams['ML_iterate_count']):
     iteration_start_time_ML = time.time()
     
-    val, ylast = MLO_box(fh, z0, lh, uh, last_pts)
+    val, ylast, ydiff = MLO_box(fh, z0, lh, uh, last_pts, y_diff)
     iteration_end_time_ML = time.time()
     iteration_time_ML = iteration_end_time_ML - iteration_start_time_ML
 
@@ -170,15 +175,19 @@ for i in range(hparams['ML_iterate_count']):
     z0 = val.clone().detach().requires_grad_(True)
     rel_f_err.append((norm(z0-x_torch, 'fro')/norm(z0, 'fro')).item())
     fval = fh(z0)
-    norm_fval.append((fval/fhz).item())
+    #norm_fval.append((fval/fhz).item())
+    norm_fval.append((fval).item())
     log_writer.add_scalar("ML_normalised_value", norm_fval[-1], i)
     fval.backward(retain_graph=True)
-    norm_grad.append((norm(z0.grad, 'fro')/Gz0).item())
+    #norm_grad.append((norm(z0.grad, 'fro')/Gz0).item())
+    norm_grad.append((norm(z0.grad, 'fro')).item())
     log_writer.add_scalar("ML_normalised_gradient", norm_grad[-1], i)
     z0.grad = None
 
     if i in hparams["ML_image_indices"]:
         log_writer.add_image(f'ML_iter', z0, global_step=i, dataformats='HW')
+    for j in range(len(y_diff)):
+        log_writer.add_scalar(f'CC {j}', y_diff[j], i)
 
     print(f"Iteration {i}: {fh(z0)} - Time: {iteration_time_ML:.6f} seconds")
 
@@ -222,10 +231,12 @@ for i in range(hparams['SL_iterate_count']):
 
     rel_f_err_SL.append((norm(w0-x_torch, 'fro')/norm(w0, 'fro')).item())
     fval = fh(w0)
-    norm_fval_SL.append((fval/fhw).item())
+    #norm_fval_SL.append((fval/fhw).item())
+    norm_fval_SL.append((fval).item())
     log_writer.add_scalar("SL_normalised_value", norm_fval_SL[-1], i)
     fval.backward(retain_graph=True)
-    norm_grad_SL.append((norm(w0.grad, 'fro')/Gw0).item())
+    #norm_grad_SL.append((norm(w0.grad, 'fro')/Gw0).item())
+    norm_grad_SL.append((norm(w0.grad, 'fro')).item())
     log_writer.add_scalar("SL_normalised_gradient", norm_grad_SL[-1], i)
 
     if i in hparams["SL_image_indices"]:
