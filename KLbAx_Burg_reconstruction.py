@@ -19,14 +19,15 @@ from skimage.transform import resize
 
 import datetime
 
+from PIL import Image
 
 hparams = {
-    "image": "shepp_logan",
+    "image": "walnut",
     "CC": "Bregman",
-    "N": 1023,
+    "N": 511,
     "max_levels": 5,
     "maxIter": [1,2,4,40,40,40],
-    "num_angels0": 200,
+    "num_angels0": 160,
     "P_inf" : 1,
     "SL_iterate_count": 10,
     "ML_iterate_count": 5,
@@ -34,14 +35,20 @@ hparams = {
     "eps": 0.001,
     "SL_image_indices": range(0,10,10),
     "ML_image_indices": range(0,5,5),
-    "lbd": 0.0,
-    "rho" : 0.0
+    "lbd": 0.1,
+    "rho" : 0.01
 }
 
-x_orig = data.shepp_logan_phantom()
-x_orig = resize(x_orig, (hparams["N"],hparams["N"]), anti_aliasing = False)
+# x_orig = data.shepp_logan_phantom()
+# x_orig = resize(x_orig, (hparams["N"],hparams["N"]), anti_aliasing = False)
 
-x_torch = torch.tensor(x_orig, requires_grad = True)
+# x_torch = torch.tensor(x_orig, requires_grad = True)
+
+
+image = Image.open('walnut.png').convert('L')
+image_np = np.array(image)
+x_orig = np.array(image.resize((hparams["N"],hparams["N"])))/255
+x_torch = torch.tensor(x_orig, requires_grad=True)
 
 
 model = mgmodel.astra_model(hparams["N"],{'mode' : 'line', 'num_angles' : hparams["num_angels0"], 'level_decrease' : 1})
@@ -129,7 +136,7 @@ def MLO_orthant(fh, y, lh, last_pts: list, y_diff:list, l=0, kappa = hparams["ka
         y = yval.detach().requires_grad_(True)
         del yval
         y.grad = None
-    return y, last_pts
+    return y, last_pts, y_diff
 
 
 ################
@@ -172,7 +179,7 @@ iteration_times_ML.append(0)
 for i in range(hparams['ML_iterate_count']):
     iteration_start_time_ML = time.time()
     
-    val, ylast, ydiff = MLO_orthant(fh, z0, lh, last_pts, ydiff)
+    val, ylast, y_diff = MLO_orthant(fh, z0, lh, last_pts, y_diff)
     iteration_end_time_ML = time.time()
     iteration_time_ML = iteration_end_time_ML - iteration_start_time_ML
 

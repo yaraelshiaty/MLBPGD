@@ -20,10 +20,12 @@ from skimage.transform import resize
 
 import datetime
 
+from PIL import Image
+
 
 hparams = {
-    "image": "shepp_logan",
-    "CC": "Bregman",
+    "image": "walnut",
+    "CC": "v2",
     "N": 1023,
     "max_levels": 2,
     "maxIter": [1,10,10,16,32,128],
@@ -32,16 +34,20 @@ hparams = {
     "SL_iterate_count": 200,
     "ML_iterate_count": 50,
     "kappa": 0.49,
-    "eps": 0.5,
-    "SL_image_indices": range(0,200, 50),
-    "ML_image_indices": range(0,50, 50)
+    "eps": 0.001,
+    "SL_image_indices": range(0,200,50),
+    "ML_image_indices": range(0,40,10)
 }
 
-x_orig = data.shepp_logan_phantom()
-x_orig = resize(x_orig, (hparams["N"],hparams["N"]), anti_aliasing = False)
+# x_orig = data.shepp_logan_phantom()
+# x_orig = resize(x_orig, (hparams["N"],hparams["N"]), anti_aliasing = False)
 
-x_torch = torch.tensor(x_orig, requires_grad = True)
+# x_torch = torch.tensor(x_orig, requires_grad = True)
 
+image = Image.open('walnut.png').convert('L')
+image_np = np.array(image)
+x_orig = np.array(image.resize((hparams["N"],hparams["N"])))/255
+x_torch = torch.tensor(x_orig, requires_grad=True)
 
 model = mgmodel.astra_model(hparams["N"],{'mode' : 'line', 'num_angles' : hparams["num_angels0"], 'level_decrease' : 1})
 fine_dim = model.dim
@@ -77,7 +83,9 @@ def MLO_box(fh, y, lh, uh, last_pts: list, y_diff:list, l=0, kappa = hparams["ka
     grad_fhy0 = y.grad.clone()
     y.grad = None
 
-    CC_bool, y_diff[l] = CC.coarse_condition_bregman_logging(y, grad_fhy0, kappa, eps, last_pts[l])
+    #CC_bool, y_diff[l] = CC.coarse_condition_bregman_logging(y, grad_fhy0, kappa, eps, last_pts[l])
+
+    CC_bool, y_diff[l] = CC.coarse_condition_v2(y, grad_fhy0, kappa, eps, last_pts[l])
     
     if CC_bool:
     #if True:
@@ -148,18 +156,18 @@ rel_f_err = []
 rel_f_err.append((norm(z0 - x_torch, 'fro')/norm(z0, 'fro')).item())
 
 norm_fval = []
-#norm_fval.append(torch.tensor(1.))
+norm_fval.append(torch.tensor(1.))
 
 fhz = fh(z0)
-norm_fval.append(fhz)
+# norm_fval.append(fhz.item())
 
 fhz.backward(retain_graph=True)
 Gz0 = norm(z0.grad, 'fro')
 z0.grad = None
 
 norm_grad = []
-#norm_grad.append(torch.tensor(1.))
-norm_grad.append(Gz0)
+norm_grad.append(torch.tensor(1.))
+#norm_grad.append(Gz0)
 
 iteration_times_ML = []
 iteration_times_ML.append(0)
@@ -175,12 +183,12 @@ for i in range(hparams['ML_iterate_count']):
     z0 = val.clone().detach().requires_grad_(True)
     rel_f_err.append((norm(z0-x_torch, 'fro')/norm(z0, 'fro')).item())
     fval = fh(z0)
-    #norm_fval.append((fval/fhz).item())
-    norm_fval.append((fval).item())
+    norm_fval.append((fval/fhz).item())
+    #norm_fval.append((fval).item())
     log_writer.add_scalar("ML_normalised_value", norm_fval[-1], i)
     fval.backward(retain_graph=True)
-    #norm_grad.append((norm(z0.grad, 'fro')/Gz0).item())
-    norm_grad.append((norm(z0.grad, 'fro')).item())
+    norm_grad.append((norm(z0.grad, 'fro')/Gz0).item())
+    #norm_grad.append((norm(z0.grad, 'fro')).item())
     log_writer.add_scalar("ML_normalised_gradient", norm_grad[-1], i)
     z0.grad = None
 
@@ -195,7 +203,7 @@ print(f"Overall time for all iterations: {sum(iteration_times_ML):.6f} seconds")
 cumaltive_times_ML = [sum(iteration_times_ML[:i+1]) for i in range(len(iteration_times_ML))]
 
 ##########
-np.savez(ckpt_path_ML, iteration_times_ML = iteration_times_ML, norm_fval_ML = norm_fval, norm_grad_ML = norm_grad, rel_f_err_ML = rel_f_err, last_iterate_ML = z0.detach().numpy())
+np.savez(ckpt_path_ML, iteration_times_ML = iteration_times_ML, norm_fval_ML = norm_fval, norm_grad_ML = norm_grad, rel_f_err_ML = rel_f_err)
 ##########
 
 
@@ -231,12 +239,12 @@ for i in range(hparams['SL_iterate_count']):
 
     rel_f_err_SL.append((norm(w0-x_torch, 'fro')/norm(w0, 'fro')).item())
     fval = fh(w0)
-    #norm_fval_SL.append((fval/fhw).item())
-    norm_fval_SL.append((fval).item())
+    norm_fval_SL.append((fval/fhw).item())
+    #norm_fval_SL.append((fval).item())
     log_writer.add_scalar("SL_normalised_value", norm_fval_SL[-1], i)
     fval.backward(retain_graph=True)
-    #norm_grad_SL.append((norm(w0.grad, 'fro')/Gw0).item())
-    norm_grad_SL.append((norm(w0.grad, 'fro')).item())
+    norm_grad_SL.append((norm(w0.grad, 'fro')/Gw0).item())
+    #norm_grad_SL.append((norm(w0.grad, 'fro')).item())
     log_writer.add_scalar("SL_normalised_gradient", norm_grad_SL[-1], i)
 
     if i in hparams["SL_image_indices"]:
@@ -251,15 +259,15 @@ cumaltive_times_SL = [sum(iteration_times_SL[:i+1]) for i in range(len(iteration
 np.savez(ckpt_path_SL, iteration_times_SL = iteration_times_SL, norm_fval_SL = norm_fval_SL, norm_grad_SL = norm_grad_SL, rel_f_err_SL = rel_f_err_SL, last_iterate_SL = w0.detach().numpy())
 ##########
 
-plt.figure(figsize=(10, 6))
-plt.plot(cumaltive_times_ML, norm_fval, marker='o', linestyle='-', label = 'ML')
-plt.plot(cumaltive_times_SL, norm_fval_SL, marker='o', linestyle='-', label = 'SL')
-plt.yscale('log')
-plt.xlabel('Cumulative CPU Time (seconds)')
-plt.ylabel('normalised function value')
-plt.title('normalised function value vs. CPU Time')
-plt.grid(True)
-plt.legend()
+# plt.figure(figsize=(10, 6))
+# plt.plot(cumaltive_times_SL, norm_fval_SL, marker='o', linestyle='-', label = 'SL')
+# plt.plot(cumaltive_times_ML, norm_fval, marker='o', linestyle='-', label = 'ML')
+# plt.yscale('log')
+# plt.xlabel('Cumulative CPU Time (seconds)')
+# plt.ylabel('normalised function value')
+# plt.title('normalised function value vs. CPU Time')
+# plt.grid(True)
+# plt.legend()
 
-log_writer.add_figure("normalised function value vs. CPU Time", plt.gcf())
-log_writer.close()
+# log_writer.add_figure("normalised function value vs. CPU Time", plt.gcf())
+# log_writer.close()
