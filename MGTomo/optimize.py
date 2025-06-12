@@ -106,7 +106,7 @@ def orthant_bounds(xh, xH, P_inf, lh, P_nonzero = None):
         lH[col_coord] = xH[col_coord] + lmax / P_inf
     return lH
 
-def orthant_bounds_optimized(xh, xH, P_inf, lh, P_nonzero=None):
+def orthant_bounds_optimized(xh, xH, P_inf, lh, uh=None, P_nonzero=None):
     coarse_dim = xH.shape[0]
     if P_nonzero is None:
         P_nonzero = gridop.compute_nonzero_elements_of_P(coarse_dim)
@@ -135,7 +135,7 @@ def orthant_bounds_optimized(xh, xH, P_inf, lh, P_nonzero=None):
     lmax = torch_scatter.scatter_max(lh[all_rows_tensor, all_cols_tensor] - diffs, all_col_coords, dim = 0)[0]
     lH[rowsH_tensor, colsH_tensor] = xH[rowsH_tensor, colsH_tensor] + lmax / P_inf
 
-    return lH
+    return lH, None
 
 def box_bounds_optimized(xh, xH, P_inf, lh, uh, P_nonzero=None):
     coarse_dim = xH.shape[0]

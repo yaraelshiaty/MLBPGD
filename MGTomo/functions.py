@@ -72,8 +72,10 @@ def BSMART(f, x: torch.tensor, tau):
     
     return x_new
 
-def BSMART_general(f, x: torch.tensor, logv, tau, l, u):
+def BSMART_general(f, x: torch.tensor, tau, l, u, logv=None):
     x = x.clone().detach().requires_grad_(True)
+    if logv is None:
+        logv = mylog(x - l) - mylog(u - x)
     fx = f(x)
     fx.backward(retain_graph = True)
     xgrad = x.grad
@@ -92,12 +94,39 @@ def BSMART_general(f, x: torch.tensor, logv, tau, l, u):
 
         assert torch.all(x_new >= l), (x_new - l).max()
         assert torch.all(x_new <= u + 1e-7), torch.sum(x_new - u <= 0)
-        #(u - x_new).min()
-        #assert torch.all(x_new <= u), x_new.flatten()[(u - x_new).argmin()]
 
     if (f(x_new) - fx).abs() < 1e-2*5:
         return x, logv
-    
+
+    return x_new, logv_new
+
+def BSMART_general_ml(f, x: torch.Tensor, tau, l, u, logv=None):
+    """
+    Mirror descent with box constraints, compatible with MultiLevelOptimizer.run.
+    Always returns (x_new, logv_new) so it can be used with *args, **kwargs in the optimizer.
+    """
+    x = x.clone().detach().requires_grad_(True)
+    if logv is None:
+        logv = mylog(x - l) - mylog(u - x)
+    fx = f(x)
+    fx.backward(retain_graph=True)
+    xgrad = x.grad
+
+    assert not torch.any(torch.isnan(logv))
+    assert not torch.any(torch.isnan(xgrad))
+
+    with torch.no_grad():
+        logv_new = logv - tau * xgrad
+        xminl = (u - l) * myexp(logv_new) * myexp(-F.softplus(logv_new))
+        x_new = xminl + l
+
+        assert not torch.any(torch.isnan(x_new)), print(x_new)
+        assert torch.all(x_new >= l - 1e-3), (x_new - l).max()
+        assert torch.all(x_new <= u + 1e-3), torch.sum(x_new - u <= 0)
+
+    # Always return (x_new, logv_new) for compatibility with MultiLevelOptimizer.run
+    if (f(x_new) - fx).abs() < 1e-2*5:
+        return x, logv
     return x_new, logv_new
 
 def Poisson_LIP(f, x: torch.tensor, tau):
@@ -113,6 +142,7 @@ def mirror_descent_IS(f, x:torch.tensor, tau, l):
     fx = f(x)
     fx.backward(retain_graph=True)
     xgrad = x.grad
+    # xgrad = A(torch.ones_like(x) - b/A(x))
 
     with torch.no_grad():
         x_new = l + torch.reciprocal(torch.reciprocal(x-l) + tau * xgrad)
@@ -120,6 +150,15 @@ def mirror_descent_IS(f, x:torch.tensor, tau, l):
     if (f(x_new) - fx).abs() < 1e-2*5:
         return x
     
+    return x_new
+
+def RL(f, x, A, b):
+    # fx = f(x)
+    # fx.backward(retain_graph = True)
+    # xgrad = x.grad
+    
+    x_new = x * A(b/A(x))
+
     return x_new
 
 #finite differences in 2D
