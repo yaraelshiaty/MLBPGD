@@ -1,11 +1,11 @@
 import MGTomo.model as mgmodel
 import MGTomo.tomoprojection as mgproj
-import MGTomo.functions as fcts
-from MGTomo.optimize import armijo_linesearch, orthant_bounds_optimized
-import MGTomo.coarse_corrections as CC
-from MGTomo.gridop import RBox as R, PBox as P
+import multilevel.functions as fcts
+from multilevel.optimize import armijo_linesearch, orthant_bounds_optimized
+import multilevel.coarse_corrections as CC
+from multilevel.gridop import RBox as R, PBox as P
 
-from MGTomo import gridop
+from multilevel import gridop
 
 import time
 import numpy as np
@@ -24,19 +24,19 @@ from PIL import Image
 hparams = {
     "image": "walnut",
     "CC": "Bregman",
-    "N": 511,
-    "max_levels": 5,
-    "maxIter": [1,2,4,40,40,40],
-    "num_angels0": 160,
+    "N": 1023,
+    "max_levels": 2,
+    "maxIter": [1,10,10,40,40,40],
+    "num_angels0": 200,
     "P_inf" : 1,
-    "SL_iterate_count": 10,
-    "ML_iterate_count": 5,
-    "kappa": 0.45,
+    "SL_iterate_count": 300,
+    "ML_iterate_count": 150,
+    "kappa": 0.49,
     "eps": 0.001,
-    "SL_image_indices": range(0,10,10),
-    "ML_image_indices": range(0,5,5),
-    "lbd": 0.1,
-    "rho" : 0.01
+    "SL_image_indices": range(0,300,50),
+    "ML_image_indices": range(0,150,10),
+    "lbd": 1e-2,
+    "rho" : 1e-2
 }
 
 # x_orig = data.shepp_logan_phantom()
@@ -79,7 +79,7 @@ if hparams['lbd'] != 0 and hparams['rho'] != 0:
 else:
     fh = lambda x: fcts.kl_distance_rev(x, b[0], A[0])
 
-tau = [0.5 * torch.reciprocal(norm(bi, ord = 1)) for bi in b]
+tau = [torch.reciprocal(norm(bi, ord = 1)) for bi in b]
         
 def MLO_orthant(fh, y, lh, last_pts: list, y_diff:list, l=0, kappa = hparams["kappa"], eps = hparams["eps"]):
     x = R(y).detach().requires_grad_(True)

@@ -1,9 +1,9 @@
 import MGBlurr.blurring as blur
-import MGTomo.functions as fcts
+import multilevel.functions as fcts
 from MGTomo.utils import mylog, mydiv
-from MGTomo.optimize import armijo_linesearch, box_bounds, orthant_bounds
-from MGTomo.gridop import RBox as R, PBox as P
-from MGTomo import gridop
+from multilevel.optimize import armijo_linesearch, box_bounds, orthant_bounds
+from multilevel.gridop import RBox as R, PBox as P
+from multilevel import gridop
 
 from skimage import data
 from skimage.transform import resize

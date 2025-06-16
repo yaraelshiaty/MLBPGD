@@ -1,9 +1,10 @@
 import MGBlurr.blurring as blur
-import MGTomo.functions as fcts
-from MGTomo.coarse_corrections import coarse_condition_bregman
-from MGTomo.optimize import armijo_linesearch
-from MGBlurr.MultiGridOperator import MultigridOperator2D
-from MGBlurr.multilevel import MultiLevelOptimizer
+import multilevel.functions as fcts
+from multilevel.coarse_corrections import coarse_condition_bregman
+from multilevel.optimize import armijo_linesearch
+from multilevel.MultiGridOperator import MultigridOperator2D
+from multilevel.multilevel import MultiLevelOptimizer
+from multilevel.results import extract_ml_metrics_with_cc
 
 from skimage.transform import resize
 import matplotlib.pyplot as plt
@@ -112,23 +113,26 @@ iteration_times_ML = []
 iteration_times_ML.append(0)
 
 # --- Multilevel optimization loop ---
+all_cc_activated = []
+
 for i in range(hparams['ML_iterate_count']):
     iteration_start_time_ML = time.time()
     
+    prev_last_pts = [p.clone() if p is not None else None for p in last_pts]  # <-- Add this line
+
     val, last_pts, y_diff = optimizer.run(z0, lh, last_pts=last_pts, y_diff=y_diff, l=0)
     iteration_end_time_ML = time.time()
     iteration_time_ML = iteration_end_time_ML - iteration_start_time_ML
 
     iteration_times_ML.append(iteration_time_ML)
     z0 = val.clone().detach().requires_grad_(True)
-    rel_f_err.append((norm(z0-x_torch, 'fro')/norm(z0, 'fro')).item())
-    fval = fh_list[0](z0)
-    norm_fval.append((fval/fhz).item())
-    log_writer.add_scalar("ML_normalised_value", norm_fval[-1], i)
-    fval.backward(retain_graph=True)
-    norm_grad.append((norm(z0.grad, 'fro')/Gz0).item())
-    log_writer.add_scalar("ML_normalised_gradient", norm_grad[-1], i)
-    z0.grad = None
+    results = extract_ml_metrics_with_cc(
+        z0, x_torch, fh_list, fhz, Gz0, norm,
+        iteration_times_ML, rel_f_err, norm_fval, norm_grad,
+        last_pts, prev_last_pts, cc_levels=[0, 1]
+    )
+
+    all_cc_activated.append(results['cc_activated'])
 
     if i in hparams["ML_image_indices"]:
         log_writer.add_image(f'ML_iter', z0, global_step=i, dataformats='HW')
@@ -141,7 +145,8 @@ print(f"Overall time for all iterations: {sum(iteration_times_ML):.6f} seconds")
 cumaltive_times_ML = [sum(iteration_times_ML[:i+1]) for i in range(len(iteration_times_ML))]
 
 ##########
-np.savez(ckpt_path_ML, iteration_times_ML = iteration_times_ML, norm_fval_ML = norm_fval, norm_grad_ML = norm_grad, rel_f_err_ML = rel_f_err, last_iterate_ML = z0.detach().numpy())
+results['cc_activated'] = np.array(all_cc_activated)
+np.savez(ckpt_path_ML, **results)
 ##########
 
 plt.figure(figsize=(10, 6))

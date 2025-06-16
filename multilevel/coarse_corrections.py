@@ -1,7 +1,7 @@
 import torch
 from torch.linalg import norm, matrix_norm
-from MGTomo.gridop import RBox as R
-import MGTomo.functions as fcts
+from multilevel.gridop import RBox as R
+import multilevel.functions as fcts
 import numpy as np
 
 

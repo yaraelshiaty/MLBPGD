@@ -1,10 +1,10 @@
 import MGBlurr.blurring as blur
-import MGTomo.functions as fcts
+import multilevel.functions as fcts
 from MGTomo.utils import mylog
-from MGTomo.optimize import armijo_linesearch, box_bounds_optimized
-from MGTomo.gridop import RBox as R, PBox as P
-from MGTomo import gridop
-import MGTomo.coarse_corrections as CC
+from multilevel.optimize import armijo_linesearch, box_bounds_optimized
+from multilevel.gridop import RBox as R, PBox as P
+from multilevel import gridop
+import multilevel.coarse_corrections as CC
 
 from skimage import data
 from skimage.transform import resize

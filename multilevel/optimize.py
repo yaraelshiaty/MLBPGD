@@ -1,6 +1,6 @@
 import torch
 import torch_scatter
-from MGTomo import gridop
+from multilevel import gridop
 
 def armijo_linesearch_box(f, x: torch.tensor, d: torch.tensor, a=1., r=0.5, c=1e-3, verbose = True):
     fx = f(x)

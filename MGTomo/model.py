@@ -1,7 +1,7 @@
 from MGTomo.tomoprojection import TomoParallel,TomoParallelSquare
 import MGTomo.grid as grid
 #import MGTomo.mgtools as mgtools
-import MGTomo.Tools.json as mjson
+# import MGTomo.Tools.json as mjson
 
 from skimage.util import view_as_windows
 import astra
@@ -109,21 +109,6 @@ class astra_model(object):
       proj = TomoParallelSquare(proj_geom, vol_geom, mode=self.mode)
       self.projs[n] = proj
       return proj
-
-  def tojson(self):
-    d = dict()
-    d['name'] = str(self)
-    d['source'] = inspect.getsource(astra_model)
-    d['sourcefile'] = inspect.getsourcefile(astra_model)
-    opt = mjson.make_json_dict(self.options).copy()
-    opt.update({ 'dim' : self.dim,
-                 'x_stencil' : self.x_stencil.shape ,
-                 'g_stencil' : { 'shape' : self.x_stencil.shape,
-                                 'g_infnorm' : self.g_infnorm}
-                 })
-    d['options'] = opt
-    return d
-
 
   @staticmethod
   def reduce_rhs(b,n,m):

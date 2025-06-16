@@ -2,12 +2,12 @@ import MGTomo.model as mgmodel
 import numpy as np
 import MGTomo.tomoprojection as mgproj
 from MGTomo.utils import myexp, mylog, mydiv
-import MGTomo.functions as fcts
+import multilevel.functions as fcts
 from skimage import data
 from skimage.transform import resize
-from MGTomo.optimize import armijo_linesearch
+from multilevel.optimize import armijo_linesearch
 
-from MGTomo.gridop import P,R
+from multilevel.gridop import P,R
 
 import torch
 from torch.func import grad

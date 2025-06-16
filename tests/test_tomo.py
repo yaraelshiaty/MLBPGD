@@ -1,10 +1,10 @@
 import MGTomo.model as mgmodel
 import MGTomo.tomoprojection as mgproj
 from MGTomo.utils import mylog
-import MGTomo.functions as fcts
-from MGTomo.optimize import armijo_linesearch, box_bounds
-from MGTomo.gridop import RBox as R, PBox as P
-from MGTomo import gridop
+import multilevel.functions as fcts
+from multilevel.optimize import armijo_linesearch, box_bounds
+from multilevel.gridop import RBox as R, PBox as P
+from multilevel import gridop
 
 import time
 import numpy as np
