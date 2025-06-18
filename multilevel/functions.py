@@ -1,4 +1,6 @@
 import torch
+import numpy as np
+from scipy.optimize import root_scalar
 import torch.nn.functional as F
 
 import MGTomo.tomoprojection as mgproj
@@ -100,11 +102,16 @@ def BSMART_general(f, x: torch.tensor, tau, l, u, logv=None):
 
     return x_new, logv_new
 
-def BSMART_general_ml(f, x: torch.Tensor, tau, l, u, logv=None):
+def BSMART_general_ml(f, x: torch.Tensor, tau, l, u, logv=None, **context):
     """
     Mirror descent with box constraints, compatible with MultiLevelOptimizer.run.
+    Accepts arbitrary **context for generality.
     Always returns (x_new, logv_new) so it can be used with *args, **kwargs in the optimizer.
     """
+    # Allow logv to be passed via context if not given directly
+    if logv is None and 'logv' in context:
+        logv = context['logv']
+
     x = x.clone().detach().requires_grad_(True)
     if logv is None:
         logv = mylog(x - l) - mylog(u - x)
@@ -189,3 +196,52 @@ def tv_huber(X, rho):
 
 def finite_diff_huber(X, rho):
     return tv_huber(nabla(X), rho)
+
+def bpgd_newton_solver(f, x, tau, lh, uh=None, *args, **context):
+    """
+    General BPGD interface for Newton/root_scalar update.
+    Expects context to provide:
+        - 'x0':  (required)
+        - 'theta': initial guess for root finding (optional, default=100)
+        - 'root_equation': function for root_scalar (required)
+        - 'root_derivative': derivative for root_scalar (required)
+        - 'bracket': tuple for root_scalar (optional, default computed from c)
+    """
+    fx = f(x)
+    fx.backward(retain_graph=True)
+    xgrad = x.grad
+
+    c = xgrad + 1/x
+    S = context['x0'].sum().item()
+    root_equation = context.get('root_equation', None)
+    root_derivative = context.get('root_derivative', None)
+    if root_equation is None or root_derivative is None:
+        raise ValueError("root_equation and root_derivative must be provided in context.")
+    theta = args[0] if len(args) > 0 else context.get('theta', 100)
+    bracket = context.get('bracket', [-(torch.min(c)).item(), 1e8])
+
+    # Detach and convert c to numpy for root_scalar
+    c_np = c.detach().cpu().numpy()
+    S_np = S  # already a float
+    theta_np = float(theta)
+    bracket_np = [float(bracket[0]), float(bracket[1])]
+
+    # Solve for theta using root_scalar (no grad)
+    res = root_scalar(
+        root_equation,
+        bracket=bracket_np,
+        args=(c_np, S_np),
+        x0=theta_np,
+        fprime=root_derivative,
+        method="bisect"
+    )
+    theta_new = res.root
+    # x_new as torch tensor, same device/dtype as x
+    x_new = 1 / (c + torch.tensor(theta_new, dtype=x.dtype, device=x.device))
+    return x_new, theta_new
+
+def Doptdesign(x: torch.Tensor, H: torch.Tensor):
+    X = torch.diag(x)
+    FIM = H @ X @ H.T
+    sign, logdet = torch.linalg.slogdet(FIM)
+    return -logdet.requires_grad_(True)

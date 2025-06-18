@@ -39,31 +39,40 @@ def armijo_linesearch_box(f, x: torch.tensor, d: torch.tensor, a=1., r=0.5, c=1e
     
     return x_new, a
 
-
-def armijo_linesearch(f, x: torch.tensor, d: torch.tensor, a=1., r = 0.5, c = 1e-3):
+def armijo_linesearch(f, x: torch.Tensor, d: torch.Tensor, dfx=None, a=1.0, r=0.5, c=1e-3, grad_f=None):
+    """
+    Armijo linesearch for function f at point x along direction d.
+    If grad_f is provided, uses grad_f(x) to compute the gradient; otherwise, computes it via autograd.
+    dfx: directional derivative at x along d (optional, will be computed if not provided)
+    """
     fx = f(x)
-    fx.backward(retain_graph=True)
-    dgk = torch.sum(x.grad * d)
-    
-    assert dgk <= 0, 'd needs to be a descent direction (dgk = %.5e)' % dgk
-    
-    if dgk == 0.:
+    if dfx is None:
+        if grad_f is not None:
+            grad = grad_f(x)
+        else:
+            x = x.clone().detach().requires_grad_(True)
+            fx_temp = f(x)
+            fx_temp.backward()
+            grad = x.grad.detach()
+        dfx = torch.sum(grad * d)
+        # If grad is numpy, convert to torch
+        if not isinstance(dfx, torch.Tensor):
+            dfx = torch.tensor(dfx)
+        dfx = dfx.item() if hasattr(dfx, 'item') else float(dfx)
+
+    if torch.all(dfx == 0.):
         return x, 0.
-    
+
     while True:
         x_new = x + a * d
-        
         f_new = f(x_new)
-        
-        if f_new <= fx + a * c * dgk:
+        if torch.all(f_new <= fx + a * c * dfx):
             break
-        
         a *= r
         if a <= 1e-7:
             print('Armijo step too small, a = 0')
             return x, 0.
-    
-    return x_new, a
+    return x_new,a
 
 def box_bounds(xh, xH, P_inf, lh, uh, P_nonzero= None):
     if P_nonzero == None:

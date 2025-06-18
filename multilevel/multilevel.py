@@ -68,6 +68,7 @@ class MultiLevelOptimizer:
         self.mgop = MultigridOperator2D(kernel)
         self.P = self.mgop.P
         self.R = self.mgop.R
+        self.P_inf = self.mgop.norm_infty_P()
 
         if "input_sizes" not in hparams:
             raise ValueError("hparams must include 'input_sizes' (list of input sizes per level)")
@@ -87,7 +88,7 @@ class MultiLevelOptimizer:
         self.compute_bounds = orthant_bounds_optimized if bounds == "orthant" else box_bounds_optimized
         self.BPGD = self._validate_BPGD(BPGD)
 
-    
+
     def _validate_BPGD(self, BPGD):
         if BPGD is None or not callable(BPGD):
             raise ValueError("BPGD must be a callable function")
@@ -150,12 +151,19 @@ class MultiLevelOptimizer:
             local_args = ()
             local_kwargs = {}
             for i in range(self.hparams["maxIter"][l+1]):
+                # Compute context for BPGD if needed
+                context = {
+                    "level": l+1,
+                    "kappa": kappa,
+                    "bounds": bounds,
+                    "iteration": i,
+                    "x0": x0
+                    # Add more context as needed for your solver
+                }
                 if self.bounds == "orthant":
-                    # _validate_BPGD expects at least (f, x, tau, lh)
-                    result = self.BPGD(psi, x, self.tau[l + 1], bounds[0], *local_args, **local_kwargs)
+                    result = self.BPGD(psi, x, self.tau[l + 1], bounds[0], *local_args, **local_kwargs, **context)
                 elif self.bounds == "box":
-                    # _validate_BPGD expects at least (f, x, tau, lh, uh)
-                    result = self.BPGD(psi, x, self.tau[l + 1], bounds[0], bounds[1], *local_args, **local_kwargs)
+                    result = self.BPGD(psi, x, self.tau[l + 1], bounds[0], bounds[1], *local_args, **local_kwargs, **context)
                 if isinstance(result, tuple):
                     x = result[0].detach().requires_grad_(True)
                     local_args = result[1:]
@@ -168,7 +176,7 @@ class MultiLevelOptimizer:
                 x, last_pts, y_diff = self.run(x, bounds[0], bounds[1], last_pts, y_diff, l + 1)
 
             d = self.P(x-x0)
-            z, _ = self.linesearch(fh, y0, d)
+            z, _= self.linesearch(fh, y0, d, dfx=grad_fhy0)
             y = z.detach().requires_grad_(True)
         else:
             print(l, ': coarse correction not activated')
@@ -177,10 +185,18 @@ class MultiLevelOptimizer:
         local_args = ()
         local_kwargs = {}
         for i in range(self.hparams["maxIter"][l]):
+            # Compute context for BPGD if needed
+            context = {
+                "level": l,
+                "bounds": (lh, uh),
+                "iteration": i,
+                "x0": y0
+                # Add more context as needed for your solver
+            }
             if self.bounds == "orthant":
-                result = self.BPGD(fh, y, self.tau[l], lh, *local_args, **local_kwargs)
+                result = self.BPGD(fh, y, self.tau[l], lh, *local_args, **local_kwargs, **context)
             elif self.bounds == "box":
-                result = self.BPGD(fh, y, self.tau[l], lh, uh, *local_args, **local_kwargs)
+                result = self.BPGD(fh, y, self.tau[l], lh, uh, *local_args, **local_kwargs, **context)
             if isinstance(result, tuple):
                 y = result[0].detach().requires_grad_(True)
                 local_args = result[1:]
