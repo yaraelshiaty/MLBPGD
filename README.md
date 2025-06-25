@@ -39,3 +39,32 @@ The codebase supports both research and reproducibility, and is organized for mo
 - The `.npz` result files for plotting can be obtained by running the example scripts.
 - TensorBoard logging is optional and can be toggled via the `log` hyperparameter in each script.
 - For more details on plotting and data extraction, see `plots/README.md`.
+
+## CUDA-dependent Packages
+
+Some dependencies require a CUDA version that matches your system:
+
+- **astra_toolbox**: [Installation instructions](https://www.astra-toolbox.com/docs/install.html)
+- **torch_scatter**: [Official wheels and instructions](https://pytorch-geometric.com/whl/)
+
+**Steps:**
+1. Check your CUDA version:
+   ```bash
+   nvcc --version
+   ```
+   or
+   ```bash
+   nvidia-smi
+   ```
+
+2. Install the compatible version of `astra_toolbox` (see their documentation).
+
+3. Install the compatible version of `torch_scatter` using the command from [https://pytorch-geometric.com/whl/](https://pytorch-geometric.com/whl/) that matches your PyTorch and CUDA version.  
+   For example:
+   ```bash
+   pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.1+cu121.html
+   ```
+   Replace `cu121` with your CUDA version.
+
+**Note:**  
+If you do not have a GPU or CUDA, install the CPU-only
