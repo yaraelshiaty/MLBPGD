@@ -27,5 +27,5 @@ def extract_images(log_dir, output_dir=None):
 if __name__ == "__main__":
     # Example usage: update the log_dir as needed
     # runs/KLAxb_reconstruction_ML/YYYYMMDD-HHMMSS
-    log_dir = "../runs/KLAxb_reconstruction_SL/20250613-164225"
+    log_dir = "/export/home/yelshiaty/multigrid/runs/KLAxb_reconstruction_ML/20250624-120305"
     extract_images(log_dir)

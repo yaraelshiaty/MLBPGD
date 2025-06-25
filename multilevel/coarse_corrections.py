@@ -16,18 +16,6 @@ def coarse_condition(y, grad_y, kappa, eta, y_last = None):
             return True, np.nan
         return False, np.nan
         
-def coarse_condition_CPU(y, grad_y, kappa, eta, y_last = None):
-    with torch.no_grad():
-        gcond = (matrix_norm(R(grad_y)) >= kappa * matrix_norm(grad_y))
-        if gcond:
-            if y_last is not None:
-                y_diff_norm = matrix_norm(y_last - y)
-                y_norm = matrix_norm(y)
-                return (y_diff_norm >= eta * y_norm)
-            return True
-        else:
-            return False
-        
 def coarse_condition_bregman(y, grad_y, kappa, eta, y_last = None):
     with torch.no_grad():
         gcond = (norm(R(grad_y), 'fro') >= kappa * norm(grad_y, 'fro'))

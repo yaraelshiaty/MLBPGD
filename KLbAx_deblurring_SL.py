@@ -17,9 +17,9 @@ hparams = {
     "N": 511,
     "kernel_size": 15,
     "sigma": 1.5,
-    "poisson_lbd": 1000,
-    "SL_iterate_count": 60,
-    "SL_image_indices": range(0,60,10),
+    "poisson_lbd": 15,
+    "SL_iterate_count": 300,
+    "SL_image_indices": range(0,500,10),
 }
 
 # --- Load image ---

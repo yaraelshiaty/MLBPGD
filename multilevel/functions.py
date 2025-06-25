@@ -145,7 +145,7 @@ def Poisson_LIP(f, x: torch.tensor, tau):
         val = torch.reciprocal(torch.reciprocal(x) + tau * xgrad)
     return val
 
-def mirror_descent_IS(f, x:torch.tensor, tau, l):
+def mirror_descent_IS(f, x:torch.tensor, tau, l, **context):
     fx = f(x)
     fx.backward(retain_graph=True)
     xgrad = x.grad

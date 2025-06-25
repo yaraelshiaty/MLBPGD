@@ -47,7 +47,7 @@ ckpt_path_SL = f"{log_writer.log_dir}/SL"
 w0 = torch.ones(hparams["N"], hparams["N"], requires_grad=True) * 0.5
 lh = torch.zeros_like(w0)
 uh = torch.ones_like(w0)
-logv_new = mylog((w0 - lh)) - mylog((uh - w0))
+# logv_new = mylog((w0 - lh)) - mylog((uh - w0))
 
 fhw = fh(w0)
 w0.retain_grad()
@@ -62,7 +62,7 @@ norm_grad_SL = [torch.tensor(1.)]
 # --- Single-level optimization loop ---
 for i in range(hparams['SL_iterate_count']):
     iteration_start_time_SL = time.time()
-    val, logv_new = fcts.BSMART_general(fh, w0, tau, lh, uh, logv_new)
+    val, logv_new = fcts.BSMART_general(fh, w0, tau, lh, uh, logv=None)
     iteration_end_time_SL = time.time()
     iteration_time_SL = iteration_end_time_SL - iteration_start_time_SL
 

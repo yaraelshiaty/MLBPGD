@@ -38,12 +38,14 @@ H = sp.csr_matrix(astra.matrix.get(matrix_id))
 Ht = torch.tensor(H.T.toarray(), dtype=torch.float32)
 
 # --- Initialization ---
+torch.manual_seed(0)
+
 n = H.shape[0]
 # Perturbed uniform initialization
 x = torch.ones(n, dtype=torch.float32) / n
-# x += 0.001 * torch.rand(n, dtype=torch.float32)
-# x = torch.clamp(x, min=1e-8)
-# x = x / x.sum()
+x += 0.001 * torch.rand(n, dtype=torch.float32)
+x = torch.clamp(x, min=1e-8)
+x = x / x.sum()
 x.requires_grad_(True)
 lh = torch.zeros_like(x)
 uh = torch.ones_like(x)
@@ -51,13 +53,17 @@ uh = torch.ones_like(x)
 # --- TensorBoard Logging Setup ---
 log_dir = f"runs/doptimaldesign_single/{datetime.datetime.now():%Y%m%d-%H%M%S}"
 log_writer = SummaryWriter(log_dir)
+ckpt_path_SL = f"{log_writer.log_dir}/SL"
 
 # --- Optimization loop ---
 from scipy.optimize import root_scalar
 
-max_iter = 30
+max_iter = 50
 solution_vec = [x.detach().numpy()]
+fx0 = dopt_objective(x, Ht).item()
 iteration_times = [0]
+norm_fval_SL = [1.]
+last_iterate_SL = None
 
 for i in range(max_iter):
     start_time = time.time()
@@ -93,11 +99,21 @@ for i in range(max_iter):
     iteration_times.append(end_time - start_time)
     solution_vec.append(x.detach().numpy())
     fx = dopt_objective(x, Ht).item()
+    # Save normalized function value (relative to first value)
+    norm_fval_SL.append(fx / fx0)
     print(f"Iteration {i}: {fx} - Time: {iteration_times[-1]:.6f} seconds")
     log_writer.add_scalar("Doptimal_value", fx, i)
 
-overall_time = sum(iteration_times)
-print(f"Overall time for all iterations: {overall_time:.6f} seconds")
+# Save last iterate
+last_iterate_SL = x.detach().numpy()
 
-log_writer.flush()
-log_writer.close()
+print(f"Overall time for all iterations: {sum(iteration_times):.6f} seconds")
+cumaltive_times = [sum(iteration_times[:i+1]) for i in range(len(iteration_times))]
+
+# --- Save results ---
+np.savez(
+    ckpt_path_SL,
+    iteration_times_SL=np.array(iteration_times),
+    norm_fval_SL=np.array(norm_fval_SL),
+    last_iterate_SL=last_iterate_SL
+)
