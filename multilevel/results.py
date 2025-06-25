@@ -4,9 +4,9 @@ from torch.linalg import norm
 def auto_norm(x, y):
     # Use Frobenius norm for 2D, 2-norm for 1D
     if x.ndim == 2:
-        return torch.linalg.norm(x - y, 'fro') / torch.linalg.norm(y, 'fro')
+        return norm(x - y, 'fro') / norm(y, 'fro')
     else:
-        return torch.linalg.norm(x - y, 2) / torch.linalg.norm(y, 2)
+        return norm(x - y, 2) / norm(y, 2)
 
 def extract_ml_metrics(z0, x_torch, fh_list, fhz, Gz0, norm, 
                       iteration_times_ML, rel_f_err, norm_fval, norm_grad):

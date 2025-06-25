@@ -1,6 +1,5 @@
 import MGBlurr.blurring as blur
 import multilevel.functions as fcts
-from multilevel.gridop import RBox as R, PBox as P
 from torch.utils.tensorboard import SummaryWriter
 
 from skimage.transform import resize

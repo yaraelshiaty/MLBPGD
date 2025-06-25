@@ -124,7 +124,7 @@ class MultiLevelOptimizer:
         grad_fhy0 = y.grad.clone()
         y.grad = None
 
-        CC_bool, y_diff[l] = self.CC(y, grad_fhy0, self.hparams["kappa"], self.hparams["eps"], last_pts[l])
+        CC_bool, y_diff[l] = self.CC(self.R, y, grad_fhy0, self.hparams["kappa"], self.hparams["eps"], last_pts[l])
 
         P_inf = self.mgop.norm_infty_P()
 

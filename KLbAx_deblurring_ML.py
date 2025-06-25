@@ -27,11 +27,11 @@ hparams = {
     "sigma": 5,
     "poisson_lbd": 15,
     "ML_iterate_count": 100,
+    "ML_image_indices": range(0,105,5),
     "kappa": 0.49,
     "eps": 0.001,
-    "SL_image_indices": range(0,100,5),
-    "ML_image_indices": range(0,100,5),
-    "bounds": "orthant"
+    "bounds": "orthant",
+    "log": True  # or False to disable logging
 }
 
 # --- Load image ---
@@ -80,11 +80,12 @@ optimizer = MultiLevelOptimizer(
 )
 
 # --- Logging setup ---
-log_dir = "runs/KLbAx_deblurring_ML/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-log_writer = SummaryWriter(log_dir)
-hparams["tau"] = tau
-log_writer.add_text("hparams", str(hparams))
-ckpt_path_ML = f"{log_writer.log_dir}/ML"
+if hparams["log"]:
+    log_dir = "runs/KLbAx_deblurring_ML/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_writer = SummaryWriter(log_dir)
+    hparams["tau"] = tau
+    log_writer.add_text("hparams", str(hparams))
+    ckpt_path_ML = f"{log_writer.log_dir}/ML"
 
 # --- Initialization ---
 z0 = torch.ones(hparams["N"], hparams["N"]) * 0.5
@@ -133,10 +134,11 @@ for i in range(hparams['ML_iterate_count']):
 
     all_cc_activated.append(results['cc_activated'])
 
-    if i in hparams["ML_image_indices"]:
-        log_writer.add_image(f'ML_iter', z0, global_step=i, dataformats='HW')
-    for j in range(len(y_diff)):
-        log_writer.add_scalar(f'CC {j}', y_diff[j], i)
+    if hparams["log"]:
+        if i in hparams["ML_image_indices"]:
+            log_writer.add_image(f'ML_iter', z0, global_step=i, dataformats='HW')
+        for j in range(len(y_diff)):
+            log_writer.add_scalar(f'CC {j}', y_diff[j], i)
 
     print(f"Iteration {i}: {fh_list[0](z0)} - Time: {iteration_time_ML:.6f} seconds")
 
@@ -145,17 +147,8 @@ cumaltive_times_ML = [sum(iteration_times_ML[:i+1]) for i in range(len(iteration
 
 ##########
 results['cc_activated'] = np.array(all_cc_activated)
-np.savez(ckpt_path_ML, **results)
+if hparams["log"]:
+    np.savez(ckpt_path_ML, **results)
+    log_writer.add_figure("normalised function value vs. CPU Time", plt.gcf())
+    log_writer.close()
 ##########
-
-plt.figure(figsize=(10, 6))
-plt.plot(cumaltive_times_ML, norm_fval, marker='o', linestyle='-', label = 'ML')
-plt.yscale('log')
-plt.xlabel('Cumulative CPU Time (seconds)')
-plt.ylabel('normalised function value')
-plt.title('normalised function value vs. CPU Time')
-plt.grid(True)
-plt.legend()
-
-log_writer.add_figure("normalised function value vs. CPU Time", plt.gcf())
-log_writer.close()

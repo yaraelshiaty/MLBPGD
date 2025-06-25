@@ -8,13 +8,11 @@ from MGTomo.utils import myexp, mylog, mydiv
 
 def kl_distance(x: torch.tensor, proj: mgproj.TomoTorch, b: torch.tensor):
     ax = proj(x)
-    #ab = torch.divide(ax, b)
     ab = mydiv(ax,b)
     
     erg = ax * mylog(ab) + b - ax
     fx = torch.sum( erg[b > 0.] ) + 0.5*torch.sum(ax[b == 0.]**2)
-    assert fx >= 0, fx
-    #assert fx >= 0, 'kl distance error: output is negative.'
+    assert fx >= 0, 'kl distance error: output is negative.'
     return fx.requires_grad_(True)
 
 def kl_distance_no_matrix(x: torch.tensor, y: torch.tensor):
@@ -53,12 +51,8 @@ def SMART(f, x: torch.tensor, tau):
     fx.backward(retain_graph = True)
     val = x * myexp(-tau * x.grad)
     
-    #assert val.max() <= 1.
-    
     if (f(val) - fx).abs() < 1e-2*5:
         return x
-    
-    #assert f(val) < fx, 'SMART iterations do not descend'
     return val
 
 def BSMART(f, x: torch.tensor, tau):
@@ -131,7 +125,6 @@ def BSMART_general_ml(f, x: torch.Tensor, tau, l, u, logv=None, **context):
         assert torch.all(x_new >= l - 1e-3), (x_new - l).max()
         assert torch.all(x_new <= u + 1e-3), torch.sum(x_new - u <= 0)
 
-    # Always return (x_new, logv_new) for compatibility with MultiLevelOptimizer.run
     if (f(x_new) - fx).abs() < 1e-2*5:
         return x, logv
     return x_new, logv_new

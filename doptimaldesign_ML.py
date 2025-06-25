@@ -1,6 +1,7 @@
 import multilevel.functions as fcts
 from multilevel.optimize import armijo_linesearch
 from multilevel.multilevel import MultiLevelOptimizer
+from multilevel.MultiGridOperator import MultigridOperatorRowsOnly2D
 from multilevel.results import extract_ml_metrics_with_cc
 
 import time
@@ -15,8 +16,19 @@ import scipy.sparse as sp
 from functools import partial
 
 np.int = np.int32
+# --- Hyperparameters ---
+hparams = {
+    "N": 63,
+    "max_levels": 1,
+    "maxIter": [1, 3],
+    "bounds": "box",
+    "num_proj": 120,
+    "det_count": 63,
+    "eta": 0.01,
+    "log": True,  # or False to disable logging
+}
 
-def coarse_condition_torch(y, grad_y=None, kappa=None, eta=0.01, y_last=None):
+def coarse_condition_torch(R, y, grad_y=None, kappa=None, eta=0.01, y_last=None):
     """
     Torch-compatible coarse correction condition.
     Returns (bool, y_diff_norm) for compatibility with CoarseCorrectionHandler.
@@ -32,11 +44,8 @@ def coarse_condition_torch(y, grad_y=None, kappa=None, eta=0.01, y_last=None):
 def box_bounds_flat(xh, xH, P_inf, lh, uh, P_nonzero=None):
     """
     Flat version: xh, xH, lh, uh are 1D tensors; P_nonzero maps input flat indices to lists of output flat indices.
+    
     """
-    if P_nonzero is None:
-        coarse_dim = xH.shape[0]
-        raise ValueError("P_nonzero must be provided for flat version.")
-
     lH = torch.zeros_like(xH)
     uH = torch.zeros_like(xH)
 
@@ -68,12 +77,12 @@ def stable_netwon_derivative(c, theta, eq_constraint):
     return -np.sum(np.exp(-2 * np.log(safe_c_theta)))  # Uses log instead of division
 
 # --- Hyperparameters ---
-fine_dim = 63
-max_levels = 1
-maxIter = [1, 3, 10]
-num_proj = 120
+fine_dim = hparams["N"]
+max_levels = hparams["max_levels"]
+maxIter = hparams["maxIter"]
+num_proj = hparams["num_proj"]
 angles = np.linspace(0, np.pi, num_proj, endpoint=False)  # Projection angles
-det_count = fine_dim
+det_count = hparams["det_count"]
 
 # --- Create fine-level geometry and operator ---
 geometry = astra.create_proj_geom('parallel', 1.0, det_count, angles)
@@ -98,6 +107,8 @@ for i in range(1, max_levels + 1):
     fine_dim=coarse_dim
 print(f"Input sizes for each level: {input_sizes}")
 
+hparams["input_sizes"] = input_sizes
+
 # Prepare fh_list for each level
 H_torch = [torch.tensor((Hl.T).toarray(), dtype=torch.float32) for Hl in H]
 fh_list = [lambda x, Ht=Ht: fcts.Doptdesign(x, Ht) for Ht in H_torch]
@@ -110,13 +121,6 @@ kernel = torch.tensor([[1, 2, 1],
                        [2, 4, 2],
                        [1, 2, 1]], dtype=torch.float32)/16.0
 
-# --- Hyperparameters dict ---
-hparams = {
-    "max_levels": max_levels,
-    "maxIter": maxIter,
-    "input_sizes": input_sizes,
-    "bounds": "box"
-}
 
 # --- MultiLevelOptimizer instance ---
 # Define your root equation and derivative
@@ -149,8 +153,6 @@ optimizer = MultiLevelOptimizer(
     BPGD=custom_bpgd_with_context,
     bounds="box"
 )
-
-from multilevel.MultiGridOperator import MultigridOperatorRowsOnly2D
 
 mgop = MultigridOperatorRowsOnly2D(width=120)
 optimizer.P = mgop.P
@@ -196,11 +198,12 @@ iteration_times_ML.append(0)
 solution_vec_ML = [x.detach().numpy()]
 
 # --- TensorBoard Logging Setup ---
-log_dir = "runs/doptimaldesign_ML/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-log_writer = SummaryWriter(log_dir)
-hparams["tau"] = tau
-log_writer.add_text("hparams", str(hparams))
-ckpt_path_ML = f"{log_writer.log_dir}/ML"
+if hparams["log"]:
+    log_dir = "runs/doptimaldesign_ML/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_writer = SummaryWriter(log_dir)
+    hparams["tau"] = tau
+    log_writer.add_text("hparams", str(hparams))
+    ckpt_path_ML = f"{log_writer.log_dir}/ML"
 
 all_cc_activated = []
 
@@ -222,11 +225,8 @@ for i in range(30):
     fx = fh_list[0](x).item()
 
     all_cc_activated.append(results['cc_activated'])
-    # solution_vec_ML.append(x.detach().numpy())
-    # fx = fh_list[0](x).item()
-    # fval.append(fx)
-    log_writer.add_scalar("ML_normalised_value", fx, i)
-
+    if hparams["log"]:
+        log_writer.add_scalar("ML_normalised_value", fx, i)
     print(f"Iteration {i}: {fx} - Time: {iteration_time_ML:.6f} seconds")
 
 print(f"Overall time for all iterations: {sum(iteration_times_ML):.6f} seconds")
@@ -235,10 +235,11 @@ cumaltive_times_ML = [sum(iteration_times_ML[:i+1]) for i in range(len(iteration
 ##########
 results['cc_activated'] = np.array(all_cc_activated, dtype=object)
 for k in results:
-    # Only convert if it's a list or array of objects (not a simple 1D float/int array)
     if isinstance(results[k], (list, tuple)) and not np.isscalar(results[k][0]):
         results[k] = np.array(results[k], dtype=object)
-np.savez(ckpt_path_ML, **results)
-##########
 
-log_writer.add_scalar("ML_normalised_value", fx, i)
+if hparams["log"]:
+    np.savez(ckpt_path_ML, **results)
+    log_writer.add_scalar("ML_normalised_value", fx, i)
+    log_writer.close()
+##########

@@ -43,15 +43,12 @@ torch.manual_seed(0)
 n = H.shape[0]
 # Perturbed uniform initialization
 x = torch.ones(n, dtype=torch.float32) / n
-x += 0.001 * torch.rand(n, dtype=torch.float32)
-x = torch.clamp(x, min=1e-8)
-x = x / x.sum()
 x.requires_grad_(True)
 lh = torch.zeros_like(x)
 uh = torch.ones_like(x)
 
 # --- TensorBoard Logging Setup ---
-log_dir = f"runs/doptimaldesign_single/{datetime.datetime.now():%Y%m%d-%H%M%S}"
+log_dir = f"runs/doptimaldesign_SL/{datetime.datetime.now():%Y%m%d-%H%M%S}"
 log_writer = SummaryWriter(log_dir)
 ckpt_path_SL = f"{log_writer.log_dir}/SL"
 
