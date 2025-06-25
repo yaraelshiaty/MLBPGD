@@ -38,6 +38,11 @@ def armijo_linesearch(f, x: torch.Tensor, d: torch.Tensor, dfx=None, a=1.0, r=0.
     return x_new,a
 
 def orthant_bounds_optimized(xh, xH, P_inf, lh, uh=None, P_nonzero=None):
+    """
+    Computes lower bounds for the coarse grid variables (xH) in the multilevel method,
+    using the fine grid variables (xh) and lower bounds (lh), based on the nonzero structure of the prolongation operator.
+    Returns the computed lower bounds lH and None (for compatibility).
+    """
     coarse_dim = xH.shape[0]
     if P_nonzero is None:
         P_nonzero = gridop.compute_nonzero_elements_of_P(coarse_dim)
@@ -69,6 +74,12 @@ def orthant_bounds_optimized(xh, xH, P_inf, lh, uh=None, P_nonzero=None):
     return lH, None
 
 def box_bounds_optimized(xh, xH, P_inf, lh, uh, P_nonzero=None):
+    """
+    Computes both lower and upper bounds for the coarse grid variables (xH) in the multilevel method,
+    using the fine grid variables (xh), lower, and upper bounds (lh) and (uh) 
+    based on the nonzero structure of the prolongation operator.
+    Returns the computed bounds (lH, uH).
+    """
     coarse_dim = xH.shape[0]
     if P_nonzero is None:
         P_nonzero = gridop.compute_nonzero_elements_of_P(coarse_dim)

@@ -1,11 +1,16 @@
 import torch
-from torch.linalg import norm, matrix_norm
-# from multilevel.gridop import RBox as R
+from torch.linalg import norm
 import multilevel.functions as fcts
 import numpy as np
 
 
 def coarse_condition(R, y, grad_y, kappa, eta, y_last = None):
+    """
+    Euclidean coarse correction condition for multilevel methods.
+    kappa checks first order optimality.
+    eta checks if the iterate has changed enough.
+    Returns (condition_met: bool, y_diff_norm: float).
+    """
     with torch.no_grad():
         gcond = (norm(R(grad_y), 'fro') >= kappa * norm(grad_y, 'fro'))
         if gcond:
@@ -17,6 +22,12 @@ def coarse_condition(R, y, grad_y, kappa, eta, y_last = None):
         return False, np.nan
         
 def coarse_condition_bregman(R, y, grad_y, kappa, eta, y_last = None):
+    """
+    Bregman coarse correction condition for multilevel methods.
+    kappa checks first order optimality.
+    eta checks if the iterate has changed enough.
+    Returns (condition_met: bool, y_diff_norm: float).
+    """
     with torch.no_grad():
         gcond = (norm(R(grad_y), 'fro') >= kappa * norm(grad_y, 'fro'))
         if gcond:

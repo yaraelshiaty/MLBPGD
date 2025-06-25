@@ -8,6 +8,8 @@ from multilevel.coarse_corrections import coarse_condition
 class CoarseCorrectionHandler:
     """
     Handles the selection and validation of the coarse correction condition (CC) function.
+    Ensures the user-supplied CC function matches the expected signature.
+    If CC is None, always activates coarse correction.
     """
     def __init__(self, CC):
         if CC is None:
@@ -33,12 +35,19 @@ class MultiLevelOptimizer:
     Multilevel optimizer supporting orthant and box constraints.
 
     Args:
-        hparams (dict): May include the following keys (defaults provided if missing):
+        fh_list (list): List of objective functions, one per level.
+        tau (list): List of step sizes per level.
+        kernel (torch.Tensor): 2D kernel for P/R construction.
+        hparams (dict): Hyperparameters, may include:
             - "kappa": coarse correction parameter (default: 0.45)
             - "eps": coarse correction threshold (default: 1e-3)
             - "maxIter": list of max iterations per level (default: 1 fine iteration, 10 for others)
+            - "max_levels": number of levels (default: len(fh_list) - 1)
+            - "input_sizes": list of input sizes per level (required)
+        CC (callable): Coarse correction condition function.
+        BPGD (callable): Block Proximal Gradient Descent solver.
+        linesearch (callable): Line search function.
         bounds (str): Either "orthant" or "box" (default: "orthant")
-        kernel (torch.Tensor): 2D kernel for P/R construction.
     """
 
     def __init__(
@@ -74,6 +83,7 @@ class MultiLevelOptimizer:
             raise ValueError("hparams must include 'input_sizes' (list of input sizes per level)")
 
         input_sizes = hparams["input_sizes"]
+        # Precompute nonzero structure of P for each level
         self.P_nonzero = [
             self.mgop.compute_nonzero_elements_of_P(input_sizes[l+1])
             for l in range(len(input_sizes) - 1)
@@ -88,8 +98,10 @@ class MultiLevelOptimizer:
         self.compute_bounds = orthant_bounds_optimized if bounds == "orthant" else box_bounds_optimized
         self.BPGD = self._validate_BPGD(BPGD)
 
-
     def _validate_BPGD(self, BPGD):
+        """
+        Checks that the provided BPGD solver is callable and has at least 4 required arguments.
+        """
         if BPGD is None or not callable(BPGD):
             raise ValueError("BPGD must be a callable function")
 
@@ -116,6 +128,11 @@ class MultiLevelOptimizer:
         return BPGD
 
     def run(self, y, lh, uh=None, last_pts=None, y_diff=None, l=0, *args, **kwargs):
+        """
+        Runs the multilevel optimization starting at level l.
+        Applies coarse correction if the CC condition is met, otherwise performs fine-level updates.
+        Returns the updated variable, last coarse points, and y_diff.
+        """
         fh = self.fh_list[l]
         x = self.R(y).detach().requires_grad_(True)
         y0 = y.detach().requires_grad_(True)
@@ -124,6 +141,7 @@ class MultiLevelOptimizer:
         grad_fhy0 = y.grad.clone()
         y.grad = None
 
+        # Check coarse correction condition
         CC_bool, y_diff[l] = self.CC(self.R, y, grad_fhy0, self.hparams["kappa"], self.hparams["eps"], last_pts[l])
 
         P_inf = self.mgop.norm_infty_P()
@@ -151,7 +169,7 @@ class MultiLevelOptimizer:
             local_args = ()
             local_kwargs = {}
             for i in range(self.hparams["maxIter"][l+1]):
-                # Compute context for BPGD if needed
+                # Context for BPGD solver
                 context = {
                     "level": l+1,
                     "kappa": kappa,
@@ -164,6 +182,7 @@ class MultiLevelOptimizer:
                     result = self.BPGD(psi, x, self.tau[l + 1], bounds[0], *local_args, **local_kwargs, **context)
                 elif self.bounds == "box":
                     result = self.BPGD(psi, x, self.tau[l + 1], bounds[0], bounds[1], *local_args, **local_kwargs, **context)
+                # Unpack result (may be tuple or tensor)
                 if isinstance(result, tuple):
                     x = result[0].detach().requires_grad_(True)
                     local_args = result[1:]
@@ -172,20 +191,22 @@ class MultiLevelOptimizer:
                     local_args = ()
                 x.grad = None
 
+            # Recursive call to next coarser level if not at coarsest
             if l < self.hparams["max_levels"]-1:
                 x, last_pts, y_diff = self.run(x, bounds[0], bounds[1], last_pts, y_diff, l + 1)
 
+            # Prolongate correction and update y
             d = self.P(x-x0)
             z, _= self.linesearch(fh, y0, d, dfx=grad_fhy0)
             y = z.detach().requires_grad_(True)
         else:
             print(l, ': coarse correction not activated')
 
-        # --- Auxiliary variables are local to this loop ---
+        # --- Fine-level updates ---
         local_args = ()
         local_kwargs = {}
         for i in range(self.hparams["maxIter"][l]):
-            # Compute context for BPGD if needed
+            # Context for BPGD solver
             context = {
                 "level": l,
                 "bounds": (lh, uh),
@@ -197,6 +218,7 @@ class MultiLevelOptimizer:
                 result = self.BPGD(fh, y, self.tau[l], lh, *local_args, **local_kwargs, **context)
             elif self.bounds == "box":
                 result = self.BPGD(fh, y, self.tau[l], lh, uh, *local_args, **local_kwargs, **context)
+            # Unpack result (may be tuple or tensor)
             if isinstance(result, tuple):
                 y = result[0].detach().requires_grad_(True)
                 local_args = result[1:]
