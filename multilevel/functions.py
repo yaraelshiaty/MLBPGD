@@ -18,6 +18,18 @@ def kl_distance(x: torch.tensor, proj: mgproj.TomoTorch, b: torch.tensor):
     assert fx >= 0, 'kl distance error: output is negative.'
     return fx.requires_grad_(True)
 
+def kl_distance_no_matrix(x: torch.tensor, y: torch.tensor):
+    """
+    Computes the Kullback-Leibler (KL) divergence between x and y.
+    Returns a scalar torch tensor with gradient tracking enabled.
+    """
+    xy = mydiv(x,y)
+
+    erg = x * mylog(xy) + y - x
+    fx = torch.sum( erg[y > 0.] ) + 0.5*torch.sum(x[y == 0.]**2)
+    assert fx >= 0, fx
+    return fx.requires_grad_(True)
+
 def kl_distance_rev(x: torch.tensor, b: torch.tensor, A: mgproj.TomoTorch):
     """
     Computes the reverse KL divergence between b and the forward projection of x.
