@@ -24,8 +24,7 @@ class AstraLinearFunction(torch.autograd.Function):
         # Note: Since custom_sparse_matrix is not a tensor that requires gradients,
         # we return None for its gradient
         return None, torch.from_numpy(grad_input_vector)
-
-
+    
 class TomoTorch(nn.Module):
     def __init__(self, tomop):
         super(TomoTorch, self).__init__()
@@ -37,17 +36,32 @@ class TomoTorch(nn.Module):
         return AstraLinearFunction.apply(self.tomop, v)
     
     def sumnorm(self):
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         dim = int(np.sqrt(self.shape[1]))
         max_sum = 0
+
+        E_ij = torch.zeros(dim, dim, device=device)
         
         for i in range(dim):
+            print(i)
             for j in range(dim):
-                E_ij = torch.zeros(dim, dim)
+                E_ij.zero_()
                 E_ij[i, j] = 1
                 col = self.forward(E_ij)
                 col_sum = torch.sum(torch.abs(col))
                 if col_sum > max_sum:
                     max_sum = col_sum
+        return max_sum
+    
+    def sumnorm_opt(self):
+        dim = int(np.sqrt(self.shape[1]))
+        E = torch.ones((dim, dim), dtype=torch.float32).to(self.dtype)
+
+        # Perform the forward operation
+        col_sum = self.forward(E)
+            
+        max_sum = torch.amax(col_sum)
+
         return max_sum
 
 class TomoParallel(object):
