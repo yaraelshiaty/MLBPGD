@@ -1,4 +1,4 @@
-# multigrid
+# MLBPGD
 
 This repository contains code for the multilevel Bregman proximal gradient descent (MLBPGD) method, with a focus on tomographic reconstruction, deblurring problems, and D-optimal design in accordance with the numerical examples provided in the corresponding paper.
 
