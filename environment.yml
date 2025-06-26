@@ -1,0 +1,13 @@
+name: mlbpgd-env
+channels:
+  - astra-toolbox
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.8
+  - numpy=1.26.4
+  - scipy=1.11.4
+  - astra-toolbox=2.2.0
+  - pip
+  - pip:
+    - -e .
